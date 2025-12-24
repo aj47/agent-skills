@@ -189,8 +189,10 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json vi
 **Features:**
 - **Word-level precision**: Uses word timestamps for exact boundaries
 - **Safety buffer**: Adds 0.1s before/after to avoid clipping inside words
+- **Filler word removal**: Automatically removes "um", "uh", "ah", "like", etc.
 - **Silence removal**: Detects and removes gaps > 0.4s between words
-- **Auto-splitting**: Splits clips at long silence points into sub-clips
+- **Clip combining**: Merges multi-part segments into single polished videos
+- **Length constraints**: Enforces 30s minimum, 3 minute maximum
 - **FFmpeg integration**: Generates high-quality MP4 clips
 
 **Arguments:**
@@ -201,21 +203,27 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json vi
 
 **How it works:**
 1. Loads word-level timestamps from original transcription
-2. For each segment, finds exact first/last words
-3. Applies 0.1s safety buffer before first word and after last word
-4. Detects silence gaps > 0.4s between words
-5. Splits into sub-clips if long silences found (keeps clips tight)
-6. Extracts each clip/sub-clip using ffmpeg with precise timing
+2. For each segment, removes filler words (um, uh, ah, etc.)
+3. Finds exact first/last words after filler removal
+4. Applies 0.1s safety buffer before first word and after last word
+5. Checks if total duration is within 30s-180s range
+6. Detects silence gaps > 0.4s between words
+7. Splits at silences and combines segments into one polished clip
+8. Extracts using ffmpeg and merges all parts seamlessly
 
 **Configuration** (edit extract_clips.py to adjust):
 - `SAFETY_BUFFER = 0.1` - Buffer before/after words (seconds)
 - `SILENCE_THRESHOLD = 0.4` - Min gap to consider silence (seconds)
-- `MIN_SUBCLIP_LENGTH = 3.0` - Min length for sub-clips (seconds)
+- `MIN_CLIP_LENGTH = 30.0` - Minimum total clip length (seconds)
+- `MAX_CLIP_LENGTH = 180.0` - Maximum total clip length (seconds)
+- `MIN_SUBCLIP_LENGTH = 3.0` - Min length for sub-clip segments (seconds)
+- `FILLER_WORDS` - Set of filler words to remove (um, uh, ah, er, hmm, etc.)
 
 **Output:**
 - Clips saved as `001_Clip_Title.mp4`, `002_Another_Clip.mp4`, etc.
-- Sub-clips (from silence splitting) saved as `001_Clip_Title_part1.mp4`, `001_Clip_Title_part2.mp4`
-- Summary stats printed at completion
+- Multi-part segments are combined into single files (no _part1, _part2)
+- Segments too short (<30s) or too long (>3min) are skipped
+- Summary stats printed: clips extracted, silences removed, fillers removed, skipped
 
 ## What Makes a Good Clip?
 

@@ -30,7 +30,10 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "M
 Automatically extracts all clips with:
 - **Word-level precision** - Uses exact word timestamps, not sentence timestamps
 - **0.1s safety buffer** - Prevents clipping inside words
-- **Silence removal** - Removes gaps > 0.4s, splits into sub-clips if needed
+- **Filler word removal** - Strips out "um", "uh", "ah", "like", etc.
+- **Silence removal** - Removes gaps > 0.4s between words
+- **Clip combining** - Merges multi-part segments into single polished videos
+- **Length constraints** - Only creates clips between 30s and 3 minutes
 - **High quality** - Re-encodes with H.264 for perfect timing
 
 ## What It Does
@@ -83,8 +86,10 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json vi
 **Features:**
 - Uses word-level timestamps for frame-perfect accuracy
 - Adds 0.1s buffer before/after to avoid clipping mid-word
+- Removes filler words (um, uh, ah, like, etc.) automatically
 - Automatically detects and removes silences > 0.4s
-- Splits long clips at silence points into tighter sub-clips
+- Combines multi-part segments into single polished clips
+- Enforces 30s minimum and 3 minute maximum length
 - Re-encodes with ffmpeg for precise timing
 
 **Output:**
@@ -178,17 +183,18 @@ Instead of using sentence-level timestamps, the script:
 3. Adds a 0.1s safety buffer before/after to prevent clipping mid-word
 4. Results in frame-perfect clip boundaries
 
-### Silence Removal
+### Filler Word & Silence Removal
 
-The script automatically detects and handles silences:
-- Scans all word gaps within each segment
-- Identifies silences > 0.4s duration
-- Splits segments into sub-clips at silence points
-- Keeps only the talking parts (removes dead air)
+The script automatically cleans up clips:
+- **Filler words**: Removes "um", "uh", "ah", "like", "er", "hmm", etc.
+- **Silences**: Scans all word gaps within each segment
+- **Gap detection**: Identifies silences > 0.4s duration
+- **Combining**: Removes silences and combines remaining parts into one clip
 
-**Example:** If a 45-second segment has a 2-second silence in the middle, it creates:
-- `001_Clip_Title_part1.mp4` (first part, 20s)
-- `001_Clip_Title_part2.mp4` (second part, 23s)
+**Example:** A 45-second segment with filler words and 2-second silence:
+1. Removes filler words
+2. Splits at silence into 2 parts (20s + 23s of talking)
+3. Combines into: `001_Clip_Title.mp4` (single 43s file, no dead air)
 
 ### Configuration
 
@@ -197,7 +203,10 @@ Edit `scripts/extract_clips.py` to adjust:
 ```python
 SAFETY_BUFFER = 0.1       # Buffer before/after words (seconds)
 SILENCE_THRESHOLD = 0.4   # Min gap to consider silence (seconds)
-MIN_SUBCLIP_LENGTH = 3.0  # Min length for sub-clips (seconds)
+MIN_CLIP_LENGTH = 30.0    # Minimum total clip length (seconds)
+MAX_CLIP_LENGTH = 180.0   # Maximum total clip length (seconds)
+MIN_SUBCLIP_LENGTH = 3.0  # Min length for sub-clip segments (seconds)
+FILLER_WORDS = {...}      # Set of filler words to remove
 ```
 
 ### Manual Extraction (Alternative)

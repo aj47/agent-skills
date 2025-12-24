@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Extract video clips from segments with word-level precision and silence removal.
+Extract video clips from segments with word-level precision and filler removal.
 
 Features:
 - Uses word-level timestamps for precise clip boundaries
 - Adds 0.1s safety buffer to avoid clipping inside words
+- Removes filler words (um, uh, ah, like, etc.)
 - Removes silences greater than 0.4s duration
-- Splits segments at long silence points
+- Combines multi-part clips into single videos
+- Enforces length constraints (30s min, 3min max)
 - Generates clips using ffmpeg
 
 Usage:
@@ -17,13 +19,22 @@ import json
 import sys
 import os
 import subprocess
+import tempfile
 from typing import List, Dict, Any, Tuple
 
 
 # Configuration
 SAFETY_BUFFER = 0.1  # seconds to add before/after words
 SILENCE_THRESHOLD = 0.4  # seconds - gaps larger than this are considered silence
-MIN_SUBCLIP_LENGTH = 3.0  # seconds - minimum length for a sub-clip after silence removal
+MIN_CLIP_LENGTH = 30.0  # seconds - minimum total clip length
+MAX_CLIP_LENGTH = 180.0  # seconds - maximum total clip length (3 minutes)
+MIN_SUBCLIP_LENGTH = 3.0  # seconds - minimum length for a sub-clip segment
+
+# Filler words to remove (case-insensitive)
+FILLER_WORDS = {
+    'um', 'uh', 'ah', 'er', 'hmm', 'mm', 'mmm',
+    'umm', 'uhh', 'ahh', 'err', 'hm'
+}
 
 
 def load_word_level_data(transcription_file: str) -> Dict[int, List[Dict]]:
@@ -43,11 +54,36 @@ def load_word_level_data(transcription_file: str) -> Dict[int, List[Dict]]:
     return word_map
 
 
+def is_filler_word(word_text: str) -> bool:
+    """Check if a word is a filler word."""
+    # Clean the word - remove punctuation and lowercase
+    clean_word = ''.join(c for c in word_text if c.isalnum()).lower()
+    return clean_word in FILLER_WORDS
+
+
+def remove_filler_words(words: List[Dict]) -> List[Dict]:
+    """
+    Remove filler words from word list.
+
+    Args:
+        words: List of word objects with 'word', 'start', 'end' fields
+
+    Returns:
+        Filtered list without filler words
+    """
+    filtered = []
+    for word in words:
+        if not is_filler_word(word.get('word', '')):
+            filtered.append(word)
+
+    return filtered
+
+
 def get_precise_boundaries(
     start_idx: int,
     end_idx: int,
     word_map: Dict[int, List[Dict]]
-) -> Tuple[float, float]:
+) -> Tuple[float, float, int]:
     """
     Get precise start and end times using word-level timestamps.
 
@@ -57,27 +93,32 @@ def get_precise_boundaries(
         word_map: Dictionary mapping sentence index to words
 
     Returns:
-        Tuple of (precise_start, precise_end) with safety buffer applied
+        Tuple of (precise_start, precise_end, total_words_before_filtering)
     """
-    # Get first word of first sentence
-    first_sentence_words = word_map.get(start_idx, [])
-    if not first_sentence_words:
-        raise ValueError(f"No words found for sentence {start_idx}")
+    # Collect all words in the segment
+    all_words = []
+    for idx in range(start_idx, end_idx + 1):
+        all_words.extend(word_map.get(idx, []))
 
-    first_word_start = first_sentence_words[0]['start']
+    if not all_words:
+        raise ValueError(f"No words found for sentences {start_idx}-{end_idx}")
 
-    # Get last word of last sentence
-    last_sentence_words = word_map.get(end_idx, [])
-    if not last_sentence_words:
-        raise ValueError(f"No words found for sentence {end_idx}")
+    original_count = len(all_words)
 
-    last_word_end = last_sentence_words[-1]['end']
+    # Remove filler words
+    all_words = remove_filler_words(all_words)
+
+    if not all_words:
+        raise ValueError(f"No words left after removing fillers for sentences {start_idx}-{end_idx}")
+
+    first_word_start = all_words[0]['start']
+    last_word_end = all_words[-1]['end']
 
     # Apply safety buffer
     precise_start = max(0, first_word_start - SAFETY_BUFFER)
     precise_end = last_word_end + SAFETY_BUFFER
 
-    return precise_start, precise_end
+    return precise_start, precise_end, original_count
 
 
 def detect_silence_gaps(
@@ -93,10 +134,12 @@ def detect_silence_gaps(
     """
     silences = []
 
-    # Collect all words in the segment
+    # Collect all words and remove fillers
     all_words = []
     for idx in range(start_idx, end_idx + 1):
         all_words.extend(word_map.get(idx, []))
+
+    all_words = remove_filler_words(all_words)
 
     # Find gaps between consecutive words
     for i in range(len(all_words) - 1):
@@ -151,60 +194,86 @@ def split_at_silences(
     return subclips
 
 
-def extract_clip_with_ffmpeg(
+def extract_temp_clip(
     video_file: str,
     start_time: float,
     end_time: float,
-    output_file: str
-) -> bool:
+    temp_dir: str,
+    index: int
+) -> str:
     """
-    Extract a clip from video using ffmpeg.
-
-    Args:
-        video_file: Path to input video
-        start_time: Start time in seconds
-        end_time: End time in seconds
-        output_file: Path to output clip
+    Extract a temporary clip segment.
 
     Returns:
-        True if successful, False otherwise
+        Path to temporary clip file
     """
     duration = end_time - start_time
+    temp_file = os.path.join(temp_dir, f"part_{index:03d}.mp4")
 
-    # Use ffmpeg with precise seeking and re-encoding for accuracy
     cmd = [
         'ffmpeg',
-        '-y',  # Overwrite output file
-        '-ss', str(start_time),  # Seek to start
-        '-i', video_file,  # Input file
-        '-t', str(duration),  # Duration
-        '-c:v', 'libx264',  # Re-encode video for precision
-        '-c:a', 'aac',  # Re-encode audio
+        '-y',
+        '-ss', str(start_time),
+        '-i', video_file,
+        '-t', str(duration),
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
         '-strict', 'experimental',
-        '-avoid_negative_ts', 'make_zero',  # Handle timestamp issues
-        output_file
+        '-avoid_negative_ts', 'make_zero',
+        temp_file
     ]
 
-    try:
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True
-        )
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    return temp_file
+
+
+def combine_clips(temp_clips: List[str], output_file: str) -> bool:
+    """
+    Combine multiple clips into one using ffmpeg concat.
+
+    Args:
+        temp_clips: List of temporary clip file paths
+        output_file: Final output file path
+
+    Returns:
+        True if successful
+    """
+    if len(temp_clips) == 1:
+        # Just move/copy the single file
+        subprocess.run(['cp', temp_clips[0], output_file], check=True)
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"FFmpeg error: {e.stderr.decode()}", file=sys.stderr)
-        return False
+
+    # Create concat file list
+    concat_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+    try:
+        for clip in temp_clips:
+            concat_file.write(f"file '{os.path.abspath(clip)}'\n")
+        concat_file.close()
+
+        # Combine using concat demuxer
+        cmd = [
+            'ffmpeg',
+            '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', concat_file.name,
+            '-c', 'copy',
+            output_file
+        ]
+
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        return True
+
+    finally:
+        os.unlink(concat_file.name)
 
 
 def sanitize_filename(title: str) -> str:
     """Convert title to safe filename."""
-    # Remove or replace unsafe characters
     safe = title.replace('/', '_').replace('\\', '_')
     safe = ''.join(c for c in safe if c.isalnum() or c in (' ', '-', '_'))
     safe = safe.strip().replace(' ', '_')
-    return safe[:100]  # Limit length
+    return safe[:100]
 
 
 def process_segments(
@@ -234,12 +303,16 @@ def process_segments(
 
     clips = segments_data.get('clips', [])
     print(f"\nProcessing {len(clips)} segments...")
+    print(f"Length constraints: {MIN_CLIP_LENGTH}s min, {MAX_CLIP_LENGTH}s max\n")
 
     stats = {
         'total_segments': len(clips),
         'clips_extracted': 0,
-        'subclips_created': 0,
+        'segments_combined': 0,
         'silences_removed': 0,
+        'fillers_removed': 0,
+        'skipped_too_short': 0,
+        'skipped_too_long': 0,
         'failed': 0
     }
 
@@ -247,16 +320,30 @@ def process_segments(
         print(f"\n[{idx}/{len(clips)}] Processing: {segment['suggested_title']}")
 
         try:
-            # Get precise boundaries using word-level data
             start_idx = segment['start_index']
             end_idx = segment['end_index']
 
-            precise_start, precise_end = get_precise_boundaries(
+            # Get precise boundaries and count fillers
+            precise_start, precise_end, original_word_count = get_precise_boundaries(
                 start_idx, end_idx, word_map
             )
 
-            print(f"  Original: {segment['start_time']:.2f}s - {segment['end_time']:.2f}s")
-            print(f"  Precise:  {precise_start:.2f}s - {precise_end:.2f}s")
+            # Calculate total duration after filler removal
+            total_duration = precise_end - precise_start
+
+            print(f"  Original: {segment['start_time']:.2f}s - {segment['end_time']:.2f}s ({segment['duration']:.1f}s)")
+            print(f"  After filler removal: {precise_start:.2f}s - {precise_end:.2f}s ({total_duration:.1f}s)")
+
+            # Check length constraints
+            if total_duration < MIN_CLIP_LENGTH:
+                print(f"  ⊘ Skipped: Too short ({total_duration:.1f}s < {MIN_CLIP_LENGTH}s minimum)")
+                stats['skipped_too_short'] += 1
+                continue
+
+            if total_duration > MAX_CLIP_LENGTH:
+                print(f"  ⊘ Skipped: Too long ({total_duration:.1f}s > {MAX_CLIP_LENGTH}s maximum)")
+                stats['skipped_too_long'] += 1
+                continue
 
             # Detect silence gaps
             silences = detect_silence_gaps(start_idx, end_idx, word_map)
@@ -265,48 +352,41 @@ def process_segments(
                 print(f"  Found {len(silences)} silence gap(s) > {SILENCE_THRESHOLD}s")
                 stats['silences_removed'] += len(silences)
 
-                # Split into sub-clips
-                subclips = split_at_silences(precise_start, precise_end, silences)
-                print(f"  Split into {len(subclips)} sub-clip(s)")
+            # Split into sub-clips
+            subclips = split_at_silences(precise_start, precise_end, silences)
+
+            if len(subclips) > 1:
+                print(f"  Combining {len(subclips)} segment(s) into one clip...")
+                stats['segments_combined'] += len(subclips)
+
+            # Create temporary directory for sub-clips
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_files = []
 
                 # Extract each sub-clip
                 for sub_idx, (sub_start, sub_end) in enumerate(subclips):
-                    safe_title = sanitize_filename(segment['suggested_title'])
+                    print(f"    Extracting segment {sub_idx+1}/{len(subclips)}: {sub_start:.2f}s - {sub_end:.2f}s")
+                    temp_file = extract_temp_clip(video_file, sub_start, sub_end, temp_dir, sub_idx)
+                    temp_files.append(temp_file)
 
-                    if len(subclips) > 1:
-                        output_file = os.path.join(
-                            output_dir,
-                            f"{idx:03d}_{safe_title}_part{sub_idx+1}.mp4"
-                        )
-                    else:
-                        output_file = os.path.join(
-                            output_dir,
-                            f"{idx:03d}_{safe_title}.mp4"
-                        )
-
-                    print(f"    Extracting part {sub_idx+1}: {sub_start:.2f}s - {sub_end:.2f}s")
-
-                    if extract_clip_with_ffmpeg(video_file, sub_start, sub_end, output_file):
-                        print(f"    ✓ Saved: {output_file}")
-                        stats['subclips_created'] += 1
-                    else:
-                        print(f"    ✗ Failed to extract sub-clip")
-                        stats['failed'] += 1
-
-                stats['clips_extracted'] += 1
-            else:
-                # No silences, extract as single clip
+                # Combine into final output
                 safe_title = sanitize_filename(segment['suggested_title'])
                 output_file = os.path.join(output_dir, f"{idx:03d}_{safe_title}.mp4")
 
-                print(f"  No silences detected")
-
-                if extract_clip_with_ffmpeg(video_file, precise_start, precise_end, output_file):
-                    print(f"  ✓ Saved: {output_file}")
+                print(f"  Combining segments into final clip...")
+                if combine_clips(temp_files, output_file):
+                    print(f"  ✓ Saved: {output_file} ({total_duration:.1f}s)")
                     stats['clips_extracted'] += 1
-                    stats['subclips_created'] += 1
+
+                    # Count filler words removed (approximation)
+                    # Get word count after filtering
+                    all_words = []
+                    for i in range(start_idx, end_idx + 1):
+                        all_words.extend(word_map.get(i, []))
+                    filtered_words = remove_filler_words(all_words)
+                    stats['fillers_removed'] += (len(all_words) - len(filtered_words))
                 else:
-                    print(f"  ✗ Failed to extract clip")
+                    print(f"  ✗ Failed to combine segments")
                     stats['failed'] += 1
 
         except Exception as e:
@@ -318,19 +398,23 @@ def process_segments(
     print("\n" + "="*60)
     print("EXTRACTION SUMMARY")
     print("="*60)
-    print(f"Total segments:       {stats['total_segments']}")
-    print(f"Clips extracted:      {stats['clips_extracted']}")
-    print(f"Sub-clips created:    {stats['subclips_created']}")
-    print(f"Silences removed:     {stats['silences_removed']}")
-    print(f"Failed:               {stats['failed']}")
+    print(f"Total segments:         {stats['total_segments']}")
+    print(f"Clips extracted:        {stats['clips_extracted']}")
+    print(f"Segments combined:      {stats['segments_combined']}")
+    print(f"Silences removed:       {stats['silences_removed']}")
+    print(f"Filler words removed:   {stats['fillers_removed']}")
+    print(f"Skipped (too short):    {stats['skipped_too_short']}")
+    print(f"Skipped (too long):     {stats['skipped_too_long']}")
+    print(f"Failed:                 {stats['failed']}")
     print(f"\nOutput directory: {output_dir}/")
+    print(f"Length range: {MIN_CLIP_LENGTH}s - {MAX_CLIP_LENGTH}s")
     print("="*60)
 
 
 def main():
     if len(sys.argv) < 4:
         print("Usage: python extract_clips.py <segments.json> <original_transcription.json> <video.mp4> [output_dir]")
-        print("\nExtracts video clips with word-level precision and silence removal.")
+        print("\nExtracts video clips with word-level precision, filler removal, and silence removal.")
         print("\nArguments:")
         print("  segments.json              - Output from analyze step")
         print("  original_transcription.json - Original transcription with word-level data")
@@ -339,7 +423,10 @@ def main():
         print(f"\nConfiguration:")
         print(f"  Safety buffer:       {SAFETY_BUFFER}s")
         print(f"  Silence threshold:   {SILENCE_THRESHOLD}s")
+        print(f"  Min clip length:     {MIN_CLIP_LENGTH}s")
+        print(f"  Max clip length:     {MAX_CLIP_LENGTH}s")
         print(f"  Min subclip length:  {MIN_SUBCLIP_LENGTH}s")
+        print(f"\nFiller words removed: {', '.join(sorted(FILLER_WORDS))}")
         sys.exit(1)
 
     segments_file = sys.argv[1]
