@@ -1,0 +1,30 @@
+# Sample data files
+out.json
+*.mp4
+parsed.json
+parsed_clean.json
+parsed_sample.json
+segments.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output
+clips/
