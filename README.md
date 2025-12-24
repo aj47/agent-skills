@@ -21,6 +21,18 @@ Claude will analyze the transcription directly and create `segments.json` with a
 
 **No API setup needed!** Claude Code analyzes the transcription itself - no extra API keys or costs.
 
+### 3. Extract Video Clips
+
+```bash
+python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "Morning+Chillin.mp4" clips/
+```
+
+Automatically extracts all clips with:
+- **Word-level precision** - Uses exact word timestamps, not sentence timestamps
+- **0.1s safety buffer** - Prevents clipping inside words
+- **Silence removal** - Removes gaps > 0.4s, splits into sub-clips if needed
+- **High quality** - Re-encodes with H.264 for perfect timing
+
 ## What It Does
 
 The skill analyzes video transcriptions to identify:
@@ -60,8 +72,25 @@ Claude reads the parsed transcription and:
 - ✅ Better integration with your workflow
 - ✅ Same high-quality analysis from Claude Sonnet 4.5
 
-### Step 3: Extract Video Clips
-Use the timestamps from `segments.json` to extract clips with ffmpeg.
+### Step 3: Extract Video Clips Automatically
+
+The `extract_clips.py` script handles precise clip extraction:
+
+```bash
+python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json video.mp4 clips/
+```
+
+**Features:**
+- Uses word-level timestamps for frame-perfect accuracy
+- Adds 0.1s buffer before/after to avoid clipping mid-word
+- Automatically detects and removes silences > 0.4s
+- Splits long clips at silence points into tighter sub-clips
+- Re-encodes with ffmpeg for precise timing
+
+**Output:**
+- `clips/001_TikTok_Vertical_Streaming_Discovery.mp4`
+- `clips/002_Why_I_Stopped_Using_Local_LLMs.mp4`
+- etc...
 
 ## Transcription Format
 
@@ -135,22 +164,48 @@ When you ask Claude to analyze, you can specify parameters:
 
 ## Extracting Video Clips
 
-Once you have `segments.json`, extract clips using ffmpeg:
+The `extract_clips.py` script automatically extracts all clips with advanced features:
 
 ```bash
-# Extract a single clip
-START_TIME=18.8
-END_TIME=26.08
-ffmpeg -i "Morning+Chillin.mp4" -ss $START_TIME -to $END_TIME -c copy clip_1.mp4
+python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "Morning+Chillin.mp4" clips/
+```
 
-# Extract all clips automatically
-mkdir -p clips
-cat segments.json | jq -r '.clips[] | @json' | while read clip; do
-  start=$(echo $clip | jq -r '.start_time')
-  end=$(echo $clip | jq -r '.end_time')
-  title=$(echo $clip | jq -r '.suggested_title' | tr ' ' '_')
-  ffmpeg -i "Morning+Chillin.mp4" -ss $start -to $end -c copy "clips/${title}.mp4"
-done
+### Word-Level Precision
+
+Instead of using sentence-level timestamps, the script:
+1. Loads word-level timestamps from the original transcription
+2. Finds the exact first and last words of each segment
+3. Adds a 0.1s safety buffer before/after to prevent clipping mid-word
+4. Results in frame-perfect clip boundaries
+
+### Silence Removal
+
+The script automatically detects and handles silences:
+- Scans all word gaps within each segment
+- Identifies silences > 0.4s duration
+- Splits segments into sub-clips at silence points
+- Keeps only the talking parts (removes dead air)
+
+**Example:** If a 45-second segment has a 2-second silence in the middle, it creates:
+- `001_Clip_Title_part1.mp4` (first part, 20s)
+- `001_Clip_Title_part2.mp4` (second part, 23s)
+
+### Configuration
+
+Edit `scripts/extract_clips.py` to adjust:
+
+```python
+SAFETY_BUFFER = 0.1       # Buffer before/after words (seconds)
+SILENCE_THRESHOLD = 0.4   # Min gap to consider silence (seconds)
+MIN_SUBCLIP_LENGTH = 3.0  # Min length for sub-clips (seconds)
+```
+
+### Manual Extraction (Alternative)
+
+If you prefer manual control, use ffmpeg directly:
+
+```bash
+ffmpeg -i "video.mp4" -ss 18.8 -to 26.08 -c:v libx264 -c:a aac output.mp4
 ```
 
 ## Using with Claude Code
@@ -178,14 +233,15 @@ This is a Claude Code skill - it activates automatically when you work with vide
 ├── SEGMENT_TYPES.md      # Detailed segment criteria
 ├── EXAMPLES.md           # Usage examples
 └── scripts/
-    └── parse_transcription.py   # Parse JSON transcription
+    ├── parse_transcription.py   # Parse JSON transcription
+    └── extract_clips.py         # Extract clips with precision & silence removal
 ```
 
 ## Requirements
 
-- **Python 3.8+** (for parsing script only - no additional packages needed)
+- **Python 3.8+** (for scripts - no additional packages needed)
+- **ffmpeg** (required for clip extraction - install with `brew install ffmpeg` on macOS or `apt-get install ffmpeg` on Linux)
 - **jq** (optional, for filtering results)
-- **ffmpeg** (optional, for extracting video clips)
 
 ## Sample Data
 
@@ -205,7 +261,8 @@ python .claude/skills/clipper/scripts/parse_transcription.py out.json > parsed.j
 
 # 3. Review the results in segments.json
 
-# 4. Extract clips with ffmpeg
+# 4. Extract clips with word-level precision and silence removal
+python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "Morning+Chillin.mp4" clips/
 ```
 
 ## Why This Approach?
@@ -264,5 +321,5 @@ Ask Claude to customize the analysis:
 1. Parse your transcription: `python .claude/skills/clipper/scripts/parse_transcription.py your_video.json > parsed.json`
 2. Ask Claude to analyze it
 3. Review the identified clips in `segments.json`
-4. Extract your favorite clips with ffmpeg
+4. Extract all clips automatically: `python .claude/skills/clipper/scripts/extract_clips.py segments.json your_video.json video.mp4 clips/`
 5. Share your clips!

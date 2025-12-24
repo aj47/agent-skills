@@ -9,7 +9,7 @@ Analyzes video transcription files to identify the most interesting and clip-wor
 
 ## Quick Start
 
-To find interesting clips in a video transcription:
+To find and extract interesting clips from a video:
 
 ```bash
 # 1. Parse the transcription JSON
@@ -17,6 +17,9 @@ python .claude/skills/clipper/scripts/parse_transcription.py <transcription.json
 
 # 2. Ask Claude to analyze the parsed transcription
 # Claude will analyze it directly and create segments.json
+
+# 3. Extract clips with word-level precision and silence removal
+python .claude/skills/clipper/scripts/extract_clips.py segments.json <transcription.json> <video.mp4> [output_dir]
 ```
 
 ## Workflow
@@ -167,13 +170,52 @@ python .claude/skills/clipper/scripts/parse_transcription.py video.json > parsed
 # 5. Reports summary to user
 ```
 
-### Step 3: Review and Export
+### Step 3: Review Identified Segments
 
 After analysis, review `segments.json`:
 - Clips are sorted by confidence (highest first)
 - Each includes precise timestamps for video extraction
 - Category and reason explain why it's interesting
 - Suggested title for the clip
+
+### Step 4: Extract Video Clips
+
+Use the extraction script to create actual video clips with word-level precision:
+
+```bash
+python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json video.mp4 clips/
+```
+
+**Features:**
+- **Word-level precision**: Uses word timestamps for exact boundaries
+- **Safety buffer**: Adds 0.1s before/after to avoid clipping inside words
+- **Silence removal**: Detects and removes gaps > 0.4s between words
+- **Auto-splitting**: Splits clips at long silence points into sub-clips
+- **FFmpeg integration**: Generates high-quality MP4 clips
+
+**Arguments:**
+1. `segments.json` - Output from Step 2 analysis
+2. `out.json` - Original transcription with word-level data
+3. `video.mp4` - Source video file
+4. `clips/` - Output directory (optional, defaults to "clips/")
+
+**How it works:**
+1. Loads word-level timestamps from original transcription
+2. For each segment, finds exact first/last words
+3. Applies 0.1s safety buffer before first word and after last word
+4. Detects silence gaps > 0.4s between words
+5. Splits into sub-clips if long silences found (keeps clips tight)
+6. Extracts each clip/sub-clip using ffmpeg with precise timing
+
+**Configuration** (edit extract_clips.py to adjust):
+- `SAFETY_BUFFER = 0.1` - Buffer before/after words (seconds)
+- `SILENCE_THRESHOLD = 0.4` - Min gap to consider silence (seconds)
+- `MIN_SUBCLIP_LENGTH = 3.0` - Min length for sub-clips (seconds)
+
+**Output:**
+- Clips saved as `001_Clip_Title.mp4`, `002_Another_Clip.mp4`, etc.
+- Sub-clips (from silence splitting) saved as `001_Clip_Title_part1.mp4`, `001_Clip_Title_part2.mp4`
+- Summary stats printed at completion
 
 ## What Makes a Good Clip?
 
@@ -194,7 +236,8 @@ See [EXAMPLES.md](EXAMPLES.md) for sample analyses and outputs.
 
 ## Requirements
 
-Python 3.8+ for the parsing script (no additional packages needed for parsing).
+- **Python 3.8+** for the scripts (no additional packages needed)
+- **ffmpeg** for video clip extraction (install: `brew install ffmpeg` on macOS or `apt-get install ffmpeg` on Linux)
 
 ## Troubleshooting
 
