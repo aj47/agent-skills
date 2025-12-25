@@ -103,7 +103,16 @@ Create a file called `segments.json` with this structure:
       "keywords": ["tiktok", "streaming", "vertical", "discovery"],
       "confidence": 0.92,
       "suggested_title": "TikTok Vertical Streaming Discovery",
-      "key_quote": "Oh my god, that's incredible."
+      "key_quote": "Oh my god, that's incredible.",
+      "first_sentence": "Oh my god, that's incredible.",
+      "last_sentence": "Didn't know I could stream like that.",
+      "total_sentences": 3,
+      "context_expansion": {
+        "sentences_added_before": 0,
+        "sentences_added_after": 0,
+        "reason": "Segment was self-contained from initial identification"
+      },
+      "coherence_validated": true
     }
   ],
   "compilations": [
@@ -191,6 +200,65 @@ When analyzing the transcription, identify segments that match these criteria:
 - **Confidence threshold**: Only include segments with confidence ≥ 0.6
 - **Context**: Consider including 10-30 seconds of setup/context before the key moment
 
+#### CRITICAL: Sentence Integrity Rules
+
+EVERY segment MUST:
+1. ✓ **Start at the BEGINNING of a sentence** (first word of sentence at start_index)
+2. ✓ **End at the END of a sentence** (last word of sentence at end_index)
+3. ✗ **NEVER include partial sentences**
+4. ✗ **NEVER start mid-sentence**
+5. ✗ **NEVER end mid-sentence**
+
+**Validation:**
+- First sentence should start naturally (capital letter, proper start)
+- Last sentence should end completely (period, question mark, or exclamation mark)
+- All sentences between start_index and end_index must be complete
+- No dangling references ("it", "this", "that") without clear antecedent in the segment
+
+#### Context Expansion Algorithm
+
+After identifying an interesting moment at sentence N, expand for coherence:
+
+**Step 1: Check if first sentence needs context**
+
+Does the first sentence:
+- Reference "this", "that", "it" without clear antecedent?
+- Use "so", "therefore", "because" implying prior setup?
+- Start with "And", "But", "Or" (continuation word)?
+- Assume knowledge from earlier in video?
+
+→ **If YES**: Include sentence N-1, then re-check
+→ **Maximum lookback**: 3 sentences
+
+**Step 2: Check if last sentence feels complete**
+
+Does the last sentence:
+- End with ellipsis or trailing thought?
+- Start explanation but not finish? (e.g., "The way this works is...")
+- Ask a question without providing an answer?
+- Feel like it's cut off mid-thought?
+
+→ **If YES**: Include sentence N+1, then re-check
+→ **Maximum lookahead**: 2 sentences
+
+**Step 3: Verify duration**
+- After context expansion, check total duration still within 30-180 seconds
+- If too long after expansion, find natural sub-division point
+
+#### Coherence Validation Checklist
+
+For EACH segment, verify all of these before including:
+
+- [ ] **Sentence Boundaries**: Starts at beginning and ends at end of complete sentences
+- [ ] **No Unclear Pronouns**: First sentence doesn't use "it", "this", "that" referring to unknown context
+- [ ] **Self-Contained**: Can be understood without watching prior video
+- [ ] **Complete Thought**: Has beginning (setup), middle (content), and end (resolution)
+- [ ] **Natural Start**: Doesn't start with continuation words without context
+- [ ] **Natural End**: Doesn't end mid-explanation, feels like natural stopping point
+- [ ] **Duration Check**: After expansion, still within 30-180 second range
+
+If any check fails, expand context or skip the segment.
+
 #### Topic and Keyword Extraction
 
 For each identified segment, extract hierarchical topics and keywords:
@@ -268,6 +336,49 @@ Since the parsed transcription may be large, analyze it in steps with overlappin
    - All individual clips with topic/subtopic/keywords
    - All compilations
    - Updated metadata including compilation count
+
+#### Step-by-Step Segment Identification with Validation
+
+When analyzing transcription, follow this process for EACH potential clip:
+
+**1. Identify Interesting Moment**
+- Scan sentences for patterns matching the 7 categories
+- Note the key sentence(s) containing the interesting moment
+- Example: Sentence 436 has high-energy reaction
+
+**2. Determine Initial Sentence Boundaries**
+- Identify complete sentence containing the moment
+- Example: Sentences 436-438 contain the core content
+
+**3. Run Context Expansion Algorithm**
+- Check first sentence for context needs (pronouns, continuation words)
+- If needed, expand backward (max 3 sentences)
+- Check last sentence for completeness
+- If needed, expand forward (max 2 sentences)
+- Example: Added sentences 434-435 for context
+
+**4. Validate Coherence Checklist**
+- Verify all items in coherence checklist
+- Ensure sentence boundaries are intact
+- Confirm self-containment
+- Check that first/last sentences make sense
+
+**5. Extract Metadata**
+- Record first_sentence and last_sentence text
+- Count total_sentences
+- Document context_expansion (how many added and why)
+- Set coherence_validated: true
+
+**6. Create Segment Entry**
+- Include all required fields
+- Add validation metadata
+- Ensure timestamps correspond to complete sentences
+
+**7. Final Validation**
+- Re-read segment text as if you've never seen the video
+- Ask: "Would this make complete sense standalone?"
+- If NO: expand further or skip segment
+- If YES: add to clips array
 
 #### Example Analysis Command Flow
 

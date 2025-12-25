@@ -23,16 +23,14 @@ Claude will automatically:
 **No API setup needed!** Claude Code handles everything - no extra API keys or costs.
 
 Automatically extracts all clips with:
-- **Word-level precision** - Uses exact word timestamps, not sentence timestamps
-- **0.1s safety buffer** - Prevents clipping inside words
+- **Coherent sentences** - Complete thoughts with proper sentence boundaries
+- **Word-level precision** - Uses exact word timestamps with 0.1s safety buffer
 - **Hierarchical topic extraction** - Automatically identifies topics and subtopics from content
 - **Automatic compilations** - Combines related segments on the same topic into longer clips
-- **Smart gap handling** - Removes gaps between segments in compilations
-- **Filler word removal** - Strips out "um", "uh", "ah", "like", etc.
-- **Silence removal** - Removes gaps > 0.4s between words
-- **Clip combining** - Merges multi-part segments into single polished videos
+- **Context validation** - Ensures clips are self-contained and understandable standalone
 - **Length constraints** - Individual clips 1-6 min, compilations can be longer
 - **High quality** - Re-encodes with H.264 for perfect timing
+- **No post-processing** - Extracts exactly what analysis identifies, preserving natural speech
 
 ## What It Does
 
@@ -111,15 +109,14 @@ Claude asks if you want clips extracted, then automatically:
 - Detects your video file (looks for `*.mp4`, `*.mov`, etc.)
 - Runs `extract_clips.py` with the right parameters
 - Extracts all individual clips to `clips/` directory
-- Extracts all compilations (multi-segment clips with gaps removed)
+- Extracts all compilations (multi-segment clips combined together)
 - Outputs both individual clips (001_Title.mp4) and compilations (comp_auth_Title.mp4)
 
 **Features:**
 - Uses word-level timestamps for frame-perfect accuracy
 - Adds 0.1s buffer before/after to avoid clipping mid-word
-- Removes filler words (um, uh, ah, like, etc.) automatically
-- Automatically detects and removes silences > 0.4s
-- Combines multi-part segments into single polished clips
+- Extracts complete, coherent sentences as identified during analysis
+- No post-processing or splitting - preserves natural speech flow
 - Enforces 1 minute minimum and 6 minute maximum length for better context
 - Re-encodes with ffmpeg for precise timing
 
@@ -218,7 +215,7 @@ When you ask Claude to analyze, you can specify parameters:
 
 ## Extracting Video Clips
 
-The `extract_clips.py` script automatically extracts all clips with advanced features:
+The `extract_clips.py` script automatically extracts all clips:
 
 ```bash
 python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "Morning+Chillin.mp4" clips/
@@ -226,37 +223,34 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "M
 
 ### Word-Level Precision
 
-Instead of using sentence-level timestamps, the script:
+The script uses word-level timestamps for frame-perfect extraction:
 1. Loads word-level timestamps from the original transcription
-2. Finds the exact first and last words of each segment
+2. Finds the exact first and last words of each coherent segment
 3. Adds a 0.1s safety buffer before/after to prevent clipping mid-word
 4. Results in frame-perfect clip boundaries
 
-### Filler Word & Silence Removal
+### Coherent Extraction
 
-The script automatically cleans up clips:
-- **Filler words**: Removes "um", "uh", "ah", "like", "er", "hmm", etc.
-- **Silences**: Scans all word gaps within each segment
-- **Gap detection**: Identifies silences > 0.4s duration
-- **Combining**: Removes silences and combines remaining parts into one clip
+The script extracts clips exactly as identified during analysis:
+- **No post-processing**: Preserves natural speech flow
+- **Complete sentences**: Always starts and ends at sentence boundaries
+- **Context preservation**: Includes all context needed for standalone understanding
+- **One continuous clip**: Each segment extracted as a single video file
 
-**Example:** A 45-second segment with filler words and 2-second silence:
-1. Removes filler words
-2. Splits at silence into 2 parts (20s + 23s of talking)
-3. Combines into: `001_Clip_Title.mp4` (single 43s file, no dead air)
+**Example:** A 2-minute coherent segment about authentication:
+1. Analysis identifies complete thought from sentence 45 to sentence 52
+2. Extraction uses word timestamps: first word of sentence 45 to last word of sentence 52
+3. Adds 0.1s buffer on each end
+4. Result: `005_Authentication_Setup.mp4` (single continuous clip with complete thought)
 
 ### Configuration
 
 Edit `scripts/extract_clips.py` to adjust:
 
 ```python
-SAFETY_BUFFER = 0.1       # Buffer before/after words (seconds)
-SILENCE_THRESHOLD = 0.4   # Min gap to consider silence (seconds)
-MIN_CLIP_LENGTH = 60.0    # Minimum total clip length (1 minute)
-MAX_CLIP_LENGTH = 360.0   # Maximum total clip length (6 minutes)
-MIN_SUBCLIP_LENGTH = 0.5  # Min length for middle sub-clip segments (seconds)
-MIN_FIRST_LAST_SUBCLIP = 0.2  # Min length for first/last segments to preserve context
-FILLER_WORDS = {...}      # Set of filler words to remove
+SAFETY_BUFFER = 0.1     # Buffer before/after words (seconds)
+MIN_CLIP_LENGTH = 60.0  # Minimum total clip length (1 minute)
+MAX_CLIP_LENGTH = 360.0 # Maximum total clip length (6 minutes)
 ```
 
 ### Manual Extraction (Alternative)
