@@ -5,6 +5,8 @@ parsed.json
 parsed_clean.json
 parsed_sample.json
 segments.json
+segments_*.json
+*.log
 
 # Python
 __pycache__/

@@ -26,8 +26,8 @@ from typing import List, Dict, Any, Tuple
 # Configuration
 SAFETY_BUFFER = 0.1  # seconds to add before/after words
 SILENCE_THRESHOLD = 0.4  # seconds - gaps larger than this are considered silence
-MIN_CLIP_LENGTH = 30.0  # seconds - minimum total clip length
-MAX_CLIP_LENGTH = 180.0  # seconds - maximum total clip length (3 minutes)
+MIN_CLIP_LENGTH = 60.0  # seconds - minimum total clip length (1 minute)
+MAX_CLIP_LENGTH = 360.0  # seconds - maximum total clip length (6 minutes)
 MIN_SUBCLIP_LENGTH = 3.0  # seconds - minimum length for a sub-clip segment
 
 # Filler words to remove (case-insensitive)

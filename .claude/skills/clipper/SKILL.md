@@ -9,28 +9,58 @@ Analyzes video transcription files to identify the most interesting and clip-wor
 
 ## Quick Start
 
-To find and extract interesting clips from a video:
+User just needs the transcription JSON and video file in their directory. When they ask you to analyze or find clips, you handle everything automatically:
 
-```bash
-# 1. Parse the transcription JSON
-python .claude/skills/clipper/scripts/parse_transcription.py <transcription.json> > parsed.json
-
-# 2. Ask Claude to analyze the parsed transcription
-# Claude will analyze it directly and create segments.json
-
-# 3. Extract clips with word-level precision and silence removal
-python .claude/skills/clipper/scripts/extract_clips.py segments.json <transcription.json> <video.mp4> [output_dir]
 ```
+User: "Find interesting clips from my video"
+```
+
+You will automatically:
+1. Detect the transcription file (usually `out.json` or `*.json`)
+2. Check if `parsed.json` exists, if not, run the parse script
+3. Analyze `parsed.json` and create `segments.json`
+4. Ask user if they want clips extracted
+5. If yes, run extraction script automatically
+
+## Execution Checklist
+
+When user asks to find clips, follow this exact sequence:
+
+**A. Detect Files**
+- [ ] Check if `parsed.json` exists
+- [ ] If not, look for transcription JSON (check `out.json` first, then `*.json`)
+- [ ] Note: `segments.json` and other analysis files are NOT transcription files
+
+**B. Parse (if needed)**
+- [ ] If `parsed.json` doesn't exist, run: `python .claude/skills/clipper/scripts/parse_transcription.py <transcription> > parsed.json`
+- [ ] Verify `parsed.json` was created successfully
+
+**C. Analyze**
+- [ ] Read `parsed.json` in windows (100-200 sentences at a time)
+- [ ] Identify clip-worthy segments using the 7 categories below
+- [ ] Write results to `segments.json`
+- [ ] Report summary to user (number of clips found, categories, etc.)
+
+**D. Extract (optional)**
+- [ ] Ask user if they want to extract clips now
+- [ ] If yes, detect video file (`*.mp4`, `*.mov`, `*.mkv`)
+- [ ] Run: `python .claude/skills/clipper/scripts/extract_clips.py segments.json <transcription> <video> clips/`
+- [ ] Monitor output and report results
 
 ## Workflow
 
-### Step 1: Parse Transcription
+### Step 1: Parse Transcription (Automatic)
 
-First, parse the raw transcription to extract sentences with timestamps:
+When a user asks you to find clips, FIRST check if `parsed.json` exists. If not, automatically run:
 
 ```bash
-python .claude/skills/clipper/scripts/parse_transcription.py out.json > parsed.json
+python .claude/skills/clipper/scripts/parse_transcription.py <transcription_file> > parsed.json
 ```
+
+**How to detect the transcription file:**
+- Look for `out.json` in current directory
+- If not found, look for any `*.json` file that contains a `sentences` array
+- Ask user if multiple JSON files are found
 
 **Input format**: JSON with `sentences` array containing:
 - `text`: Sentence content
@@ -136,11 +166,12 @@ When analyzing the transcription, identify segments that match these criteria:
 
 #### Technical Requirements for Clips
 
-- **Duration**: Between 10-60 seconds (ideal: 15-45 seconds)
+- **Duration**: Between 30-180 seconds (ideal: 60-120 seconds for context-rich clips)
 - **Completeness**: Must be complete thoughts, not cut mid-sentence
-- **Self-contained**: Understandable without prior video context
+- **Self-contained**: Understandable without prior video context (include setup/context before key moments)
 - **Natural boundaries**: Start/end at logical points in speech
 - **Confidence threshold**: Only include segments with confidence ≥ 0.6
+- **Context**: Consider including 10-30 seconds of setup/context before the key moment
 
 #### Multi-step Process
 
@@ -178,13 +209,18 @@ After analysis, review `segments.json`:
 - Category and reason explain why it's interesting
 - Suggested title for the clip
 
-### Step 4: Extract Video Clips
+### Step 4: Extract Video Clips (Automatic)
 
-Use the extraction script to create actual video clips with word-level precision:
+After creating `segments.json`, ask the user if they want to extract the clips. If yes, automatically detect the video file and run:
 
 ```bash
-python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json video.mp4 clips/
+python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_transcription> <video_file> clips/
 ```
+
+**How to detect files:**
+- Original transcription: Use the same file from Step 1 (usually `out.json`)
+- Video file: Look for `*.mp4`, `*.mov`, or `*.mkv` in current directory
+- Ask user if multiple video files are found
 
 **Features:**
 - **Word-level precision**: Uses word timestamps for exact boundaries
@@ -214,15 +250,15 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json vi
 **Configuration** (edit extract_clips.py to adjust):
 - `SAFETY_BUFFER = 0.1` - Buffer before/after words (seconds)
 - `SILENCE_THRESHOLD = 0.4` - Min gap to consider silence (seconds)
-- `MIN_CLIP_LENGTH = 30.0` - Minimum total clip length (seconds)
-- `MAX_CLIP_LENGTH = 180.0` - Maximum total clip length (seconds)
+- `MIN_CLIP_LENGTH = 60.0` - Minimum total clip length (1 minute)
+- `MAX_CLIP_LENGTH = 360.0` - Maximum total clip length (6 minutes)
 - `MIN_SUBCLIP_LENGTH = 3.0` - Min length for sub-clip segments (seconds)
 - `FILLER_WORDS` - Set of filler words to remove (um, uh, ah, er, hmm, etc.)
 
 **Output:**
 - Clips saved as `001_Clip_Title.mp4`, `002_Another_Clip.mp4`, etc.
 - Multi-part segments are combined into single files (no _part1, _part2)
-- Segments too short (<30s) or too long (>3min) are skipped
+- Segments too short (<1min) or too long (>6min) are skipped
 - Summary stats printed: clips extracted, silences removed, fillers removed, skipped
 
 ## What Makes a Good Clip?
@@ -233,10 +269,12 @@ See the criteria in Step 2 above, or review [SEGMENT_TYPES.md](SEGMENT_TYPES.md)
 
 You can adjust these parameters when analyzing:
 
-- **MIN_CLIP_LENGTH**: 10 seconds (skip shorter segments)
-- **MAX_CLIP_LENGTH**: 60 seconds (skip longer segments)
+- **MIN_CLIP_LENGTH**: 30 seconds (ideal range for analysis, extraction enforces 60s minimum)
+- **MAX_CLIP_LENGTH**: 180 seconds (ideal range for analysis, extraction allows up to 360s)
 - **CONFIDENCE_THRESHOLD**: 0.6 (only include clips above this score)
 - **WINDOW_SIZE**: 100 sentences per analysis window
+
+Note: The extraction script enforces 60s minimum and 360s maximum to ensure clips have sufficient context.
 
 ## Examples
 

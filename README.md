@@ -4,28 +4,21 @@ A Claude Code skill for analyzing video transcriptions and automatically identif
 
 ## Quick Start
 
-### 1. Parse Your Transcription
-
-```bash
-python .claude/skills/clipper/scripts/parse_transcription.py out.json > parsed.json
-```
-
-### 2. Ask Claude to Analyze
+**All you need:** Your transcription JSON file (e.g., `out.json`) and video file in the same directory.
 
 Simply ask Claude:
 ```
-"Analyze parsed.json and find interesting clips for me"
+"Find interesting clips from my video"
 ```
 
-Claude will analyze the transcription directly and create `segments.json` with all the interesting clips, timestamps, and metadata.
+Claude will automatically:
+1. ✅ Parse your transcription (if needed)
+2. ✅ Analyze it to find clip-worthy moments
+3. ✅ Create `segments.json` with all clips and metadata
+4. ✅ Ask if you want to extract the clips
+5. ✅ Extract all clips with word-level precision
 
-**No API setup needed!** Claude Code analyzes the transcription itself - no extra API keys or costs.
-
-### 3. Extract Video Clips
-
-```bash
-python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "Morning+Chillin.mp4" clips/
-```
+**No API setup needed!** Claude Code handles everything - no extra API keys or costs.
 
 Automatically extracts all clips with:
 - **Word-level precision** - Uses exact word timestamps, not sentence timestamps
@@ -33,7 +26,7 @@ Automatically extracts all clips with:
 - **Filler word removal** - Strips out "um", "uh", "ah", "like", etc.
 - **Silence removal** - Removes gaps > 0.4s between words
 - **Clip combining** - Merges multi-part segments into single polished videos
-- **Length constraints** - Only creates clips between 30s and 3 minutes
+- **Length constraints** - Only creates clips between 1 minute and 6 minutes for better context
 - **High quality** - Re-encodes with H.264 for perfect timing
 
 ## What It Does
@@ -55,14 +48,16 @@ Each identified segment includes:
 
 ## How It Works
 
-### Step 1: Parse Transcription
-The `parse_transcription.py` script extracts sentences with timestamps from your JSON transcription file:
+### Fully Automatic Workflow
 
-```bash
-python .claude/skills/clipper/scripts/parse_transcription.py video.json > parsed.json
-```
+When you ask Claude to find clips from your video, it automatically:
 
-### Step 2: Claude Analyzes Directly
+**Step 1: Parse Transcription** (if needed)
+- Detects your transcription file (usually `out.json`)
+- Runs `parse_transcription.py` to create a simplified version
+- Caches result as `parsed.json` for faster future analysis
+
+**Step 2: Analyze for Clip-Worthy Moments**
 Claude reads the parsed transcription and:
 1. Analyzes sentences in manageable windows
 2. Identifies clip-worthy moments based on 7 categories
@@ -75,13 +70,11 @@ Claude reads the parsed transcription and:
 - ✅ Better integration with your workflow
 - ✅ Same high-quality analysis from Claude Sonnet 4.5
 
-### Step 3: Extract Video Clips Automatically
-
-The `extract_clips.py` script handles precise clip extraction:
-
-```bash
-python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json video.mp4 clips/
-```
+**Step 3: Extract Video Clips** (optional)
+Claude asks if you want clips extracted, then automatically:
+- Detects your video file (looks for `*.mp4`, `*.mov`, etc.)
+- Runs `extract_clips.py` with the right parameters
+- Extracts all clips to `clips/` directory
 
 **Features:**
 - Uses word-level timestamps for frame-perfect accuracy
@@ -89,7 +82,7 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json vi
 - Removes filler words (um, uh, ah, like, etc.) automatically
 - Automatically detects and removes silences > 0.4s
 - Combines multi-part segments into single polished clips
-- Enforces 30s minimum and 3 minute maximum length
+- Enforces 1 minute minimum and 6 minute maximum length for better context
 - Re-encodes with ffmpeg for precise timing
 
 **Output:**
@@ -203,8 +196,8 @@ Edit `scripts/extract_clips.py` to adjust:
 ```python
 SAFETY_BUFFER = 0.1       # Buffer before/after words (seconds)
 SILENCE_THRESHOLD = 0.4   # Min gap to consider silence (seconds)
-MIN_CLIP_LENGTH = 30.0    # Minimum total clip length (seconds)
-MAX_CLIP_LENGTH = 180.0   # Maximum total clip length (seconds)
+MIN_CLIP_LENGTH = 60.0    # Minimum total clip length (1 minute)
+MAX_CLIP_LENGTH = 360.0   # Maximum total clip length (6 minutes)
 MIN_SUBCLIP_LENGTH = 3.0  # Min length for sub-clip segments (seconds)
 FILLER_WORDS = {...}      # Set of filler words to remove
 ```
@@ -222,11 +215,14 @@ ffmpeg -i "video.mp4" -ss 18.8 -to 26.08 -c:v libx264 -c:a aac output.mp4
 This is a Claude Code skill - it activates automatically when you work with video transcriptions.
 
 **Example prompts:**
-- "Analyze the transcription and find interesting clips"
+- "Find interesting clips from my video"
 - "What are the best moments to clip from this video?"
-- "Find high-energy reactions in parsed.json"
+- "Analyze my transcription and extract the top 15 clips"
+- "Find high-energy reactions and teaching moments"
 - "Show me only tip segments with high confidence"
-- "Find clips between 20-40 seconds long"
+- "Find longer clips around 2-3 minutes for YouTube"
+
+Claude will automatically detect your transcription and video files, handle all the processing, and ask if you want clips extracted.
 
 ## Documentation
 
@@ -261,18 +257,19 @@ This repository includes sample data:
 
 ## Try It Now
 
-```bash
-# 1. Parse the sample transcription
-python .claude/skills/clipper/scripts/parse_transcription.py out.json > parsed.json
+Just ask Claude in natural language:
 
-# 2. Ask Claude
-# "Analyze parsed.json and find the top 10 most interesting clips"
-
-# 3. Review the results in segments.json
-
-# 4. Extract clips with word-level precision and silence removal
-python .claude/skills/clipper/scripts/extract_clips.py segments.json out.json "Morning+Chillin.mp4" clips/
 ```
+"Find interesting clips from my video"
+```
+
+or
+
+```
+"Analyze my video transcription and find the top 10 most interesting clips"
+```
+
+Claude handles everything automatically! No manual script running needed.
 
 ## Why This Approach?
 
@@ -312,7 +309,7 @@ cat segments.json | jq '.clips[] | select(.confidence > 0.85)'
 ### Custom Analysis
 
 Ask Claude to customize the analysis:
-- "Find only short clips under 30 seconds"
+- "Find longer clips with more context, around 2-3 minutes"
 - "Focus on teaching moments and tips"
 - "Show me the most entertaining segments"
 - "Find clips with strong opinions about AI"
@@ -327,8 +324,8 @@ Ask Claude to customize the analysis:
 
 ## Next Steps
 
-1. Parse your transcription: `python .claude/skills/clipper/scripts/parse_transcription.py your_video.json > parsed.json`
-2. Ask Claude to analyze it
-3. Review the identified clips in `segments.json`
-4. Extract all clips automatically: `python .claude/skills/clipper/scripts/extract_clips.py segments.json your_video.json video.mp4 clips/`
+1. Put your transcription JSON and video file in a directory
+2. Ask Claude: "Find interesting clips from my video"
+3. Claude handles parsing, analysis, and extraction automatically
+4. Review your clips in the `clips/` directory
 5. Share your clips!
