@@ -1,0 +1,86 @@
+{
+  "clip_index": 1,
+  "clip_title": "Building Multi-Agent Orchestration with ACP Protocol",
+  "suggested_title": "Building Multi-Agent Orchestration with ACP Protocol",
+  "generated_at": "2025-01-15T10:30:00Z",
+  "clip_keywords": ["speakmcp", "acp", "multi-agent", "orchestrator", "sub-agents", "augment code"],
+  "media": [
+    {
+      "type": "screenshot",
+      "name": "speakmcp_github",
+      "source": "playwright",
+      "url": "https://github.com/aj47/SpeakMCP",
+      "path": "media/clip_002/screenshots/speakmcp_github.png",
+      "description": "SpeakMCP GitHub repository - the main orchestrator being discussed",
+      "relevance": "Primary project mentioned in clip - voice-powered agent with multi-agent capabilities"
+    },
+    {
+      "type": "screenshot",
+      "name": "speakmcp_landing",
+      "source": "playwright",
+      "url": "https://speakmcp.com/",
+      "path": "media/clip_002/screenshots/speakmcp_landing.png",
+      "description": "SpeakMCP landing page",
+      "relevance": "Product page for the main tool being demonstrated"
+    },
+    {
+      "type": "screenshot",
+      "name": "acp_github",
+      "source": "playwright",
+      "url": "https://github.com/i-am-bee/acp",
+      "path": "media/clip_002/screenshots/acp_github.png",
+      "description": "IBM's Agent Communication Protocol (ACP) GitHub repository",
+      "relevance": "The protocol mentioned for agent-to-agent communication"
+    },
+    {
+      "type": "screenshot",
+      "name": "acp_docs",
+      "source": "playwright",
+      "url": "https://agentcommunicationprotocol.dev/",
+      "path": "media/clip_002/screenshots/acp_docs.png",
+      "description": "ACP Protocol official documentation",
+      "relevance": "Documentation for the ACP protocol standard"
+    },
+    {
+      "type": "screenshot",
+      "name": "augment_code",
+      "source": "playwright",
+      "url": "https://augmentcode.com/",
+      "path": "media/clip_002/screenshots/augment_code.png",
+      "description": "Augment Code (Augi) landing page",
+      "relevance": "One of the sub-agents mentioned that SpeakMCP can delegate to"
+    },
+    {
+      "type": "diagram",
+      "name": "multi_agent_orchestration",
+      "source": "mermaid/kroki.io",
+      "path": "media/clip_002/diagrams/multi_agent_orchestration.png",
+      "description": "Architecture diagram showing SpeakMCP multi-agent orchestration flow",
+      "relevance": "Visualizes the multi-agent architecture discussed: main agent delegating to sub-agents via ACP"
+    },
+    {
+      "type": "logo",
+      "name": "speakmcp",
+      "source": "brandfetch",
+      "domain": "speakmcp.com",
+      "path": "media/clip_002/logos/speakmcp_com.png",
+      "relevance": "Logo for the main product discussed"
+    },
+    {
+      "type": "logo",
+      "name": "augmentcode",
+      "source": "brandfetch",
+      "domain": "augmentcode.com",
+      "path": "media/clip_002/logos/augmentcode_com.png",
+      "relevance": "Logo for Augment Code (Augi), one of the sub-agents"
+    }
+  ],
+  "summary": {
+    "screenshots_captured": 5,
+    "diagrams_generated": 1,
+    "logos_fetched": 2,
+    "gifs_downloaded": 0,
+    "videos_downloaded": 0,
+    "total_media": 8
+  }
+}

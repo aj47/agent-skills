@@ -1,0 +1,43 @@
+flowchart TB
+    subgraph SpeakMCP["SpeakMCP (Main Orchestrator)"]
+        direction TB
+        Voice["Voice Input"]
+        MainAgent["Main Agent"]
+        ACP["ACP Protocol Layer"]
+    end
+
+    subgraph SubAgents["Sub-Agents via ACP"]
+        direction TB
+        Internal["Internal Sub-Agent<br/>(SpeakMCP calling itself)"]
+        Augi["Augi<br/>(Augment Code)"]
+        ClaudeCode["Claude Code"]
+    end
+
+    subgraph Tools["MCP Tools"]
+        direction TB
+        Terminal["Terminal"]
+        FileSystem["File System"]
+        Browser["Browser"]
+        Custom["Custom MCP Servers"]
+    end
+
+    Voice --> MainAgent
+    MainAgent --> ACP
+    ACP -->|"Delegate Task"| Internal
+    ACP -->|"Delegate Task"| Augi
+    ACP -->|"Delegate Task"| ClaudeCode
+
+    Internal -->|"Return Output"| ACP
+    Augi -->|"Return Output"| ACP
+    ClaudeCode -->|"Return Output"| ACP
+
+    MainAgent --> Tools
+    Internal --> Tools
+    Augi --> Tools
+    ClaudeCode --> Tools
+
+    style SpeakMCP fill:#1a1a2e,stroke:#16213e,color:#fff
+    style SubAgents fill:#0f3460,stroke:#16213e,color:#fff
+    style Tools fill:#533483,stroke:#16213e,color:#fff
+    style MainAgent fill:#e94560,stroke:#fff,color:#fff
+    style ACP fill:#00b4d8,stroke:#fff,color:#000
