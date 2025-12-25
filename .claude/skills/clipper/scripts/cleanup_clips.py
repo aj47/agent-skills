@@ -27,7 +27,7 @@ from typing import List, Dict, Any, Tuple
 
 # Configuration
 SAFETY_BUFFER = 0.1       # seconds to add before/after cuts
-SILENCE_THRESHOLD = 0.4   # minimum gap to consider silence (seconds)
+SILENCE_THRESHOLD = 0.25  # minimum gap to consider silence (seconds)
 MIN_SEGMENT_LENGTH = 0.3  # minimum segment length to keep (seconds)
 
 # Filler words to remove (lowercase)
