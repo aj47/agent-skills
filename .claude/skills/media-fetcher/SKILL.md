@@ -70,6 +70,22 @@ Read `segments.json` from the clipper skill. For each clip, extract:
 - **Concepts**: Technical terms (for diagrams)
 - **Emotions**: Reactions, humor (for GIFs)
 - **References**: URLs, videos mentioned (for screenshots, video clips)
+- **Timestamps**: When each entity is mentioned (for timing media overlays)
+
+**Important**: Always note the timestamp (in seconds) when each entity is mentioned. This is critical for timing media overlays correctly in the final video.
+
+Example analysis:
+```
+Clip: "014_When_Will_Local_LLMs_Be_Worth_It.mp4"
+Duration: 32.5s
+
+Entities with timestamps:
+- 0:02 - "local LLMs" → diagram showing local vs cloud
+- 0:08 - "Ollama" → Ollama logo
+- 0:12 - "LM Studio" → LM Studio logo
+- 0:18 - "NVIDIA" → NVIDIA logo
+- 0:25 - "mid 2026" → timeline diagram
+```
 
 ### Step 2: Fetch Media by Type
 
@@ -158,40 +174,59 @@ python .claude/skills/media-fetcher/scripts/download_video.py "https://youtube.c
 
 ### Step 3: Create Media Manifest
 
-After fetching, create `media_manifest.json`:
+After fetching, create `media_manifest.json` with **timestamp information** for each media asset:
 
 ```json
 {
   "generated_at": "2025-01-15T10:30:00Z",
   "clips": [
     {
-      "clip_index": 0,
+      "clip_file": "001_OAuth_Setup_Guide.mp4",
       "clip_title": "OAuth Setup Guide",
+      "clip_duration": 45.5,
       "media": [
         {
           "type": "logo",
           "source": "brandfetch",
           "entity": "github.com",
           "path": "media/logos/github.png",
-          "relevance": "GitHub mentioned as OAuth provider"
+          "relevance": "GitHub mentioned as OAuth provider",
+          "timestamp_start": 5.0,
+          "timestamp_end": 12.0,
+          "trigger_text": "we're going to use GitHub for OAuth"
         },
         {
           "type": "screenshot",
           "source": "playwright",
           "url": "https://github.com/settings/developers",
           "path": "media/screenshots/github_oauth_settings.png",
-          "relevance": "OAuth app registration page shown"
+          "relevance": "OAuth app registration page shown",
+          "timestamp_start": 15.5,
+          "timestamp_end": 25.0,
+          "trigger_text": "go to your GitHub developer settings"
         },
         {
           "type": "diagram",
           "source": "mermaid",
           "description": "OAuth flow diagram",
           "path": "media/diagrams/oauth_flow.png",
-          "relevance": "Visualizes the authentication flow discussed"
+          "relevance": "Visualizes the authentication flow discussed",
+          "timestamp_start": 30.0,
+          "timestamp_end": 42.0,
+          "trigger_text": "the flow works like this"
         }
       ]
     }
   ],
+  "shared_media": {
+    "gifs": [
+      {
+        "query": "mind blown",
+        "files": ["media/gifs/mind_blown_001.mp4"],
+        "use_for": "Impressive technical moments"
+      }
+    ]
+  },
   "summary": {
     "total_clips": 15,
     "logos_fetched": 8,
@@ -201,6 +236,37 @@ After fetching, create `media_manifest.json`:
     "videos_downloaded": 2
   }
 }
+```
+
+#### Media Manifest Schema
+
+Each media item in a clip should include:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Media type: `logo`, `screenshot`, `diagram`, `gif`, `video` |
+| `path` | string | Yes | Relative path to the media file |
+| `relevance` | string | Yes | Why this media is relevant to the clip |
+| `timestamp_start` | float | Yes | Seconds into the clip when media should appear |
+| `timestamp_end` | float | No | Seconds when media should disappear (default: start + 5s) |
+| `trigger_text` | string | No | The spoken text that triggers this media |
+| `source` | string | No | Where the media came from (brandfetch, playwright, giphy, mermaid) |
+| `entity` | string | No | For logos: the domain (e.g., "github.com") |
+| `url` | string | No | For screenshots: the source URL |
+
+#### Determining Timestamps
+
+To find the right timestamps for media:
+
+1. **From segments.json**: If the clipper skill provides word-level timestamps, use those to find when entities are mentioned
+2. **From transcription**: Search for trigger phrases like "let me show you", "as you can see", or entity names
+3. **Manual review**: Watch the clip and note when visual aids would help
+
+**Example workflow with transcription timestamps:**
+```
+Transcription: "...at 5.2s: 'GitHub' ...at 15.8s: 'developer settings'..."
+→ Logo appears at 5.0s (slightly before mention)
+→ Screenshot appears at 15.5s
 ```
 
 ## Media Types Reference
@@ -367,11 +433,49 @@ media/
 
 This skill is designed to work alongside the clipper skill:
 
-1. **Clipper** analyzes transcription → creates `segments.json`
-2. **Media-fetcher** reads `segments.json` → fetches contextual media
-3. Output: Clips in `clips/` + media in `media/` + `media_manifest.json`
+1. **Clipper** analyzes transcription → creates `segments.json` with word-level timestamps
+2. **Media-fetcher** reads `segments.json` → extracts entities AND their timestamps
+3. **Media-fetcher** fetches relevant media for each entity
+4. **Media-fetcher** creates `media_manifest.json` linking media to clips with precise timestamps
+5. Output: Clips in `clips/` or `highlights/` + media in `media/` + `media_manifest.json`
 
-The manifest links each media asset to its corresponding clip for easy integration.
+### Getting Timestamps from segments.json
+
+The clipper skill's `segments.json` contains word-level timing. Use this to find when entities are mentioned:
+
+```json
+{
+  "segments": [
+    {
+      "file": "014_When_Will_Local_LLMs_Be_Worth_It.mp4",
+      "words": [
+        {"word": "local", "start": 2.1, "end": 2.4},
+        {"word": "LLMs", "start": 2.5, "end": 2.9},
+        {"word": "Ollama", "start": 8.2, "end": 8.7}
+      ]
+    }
+  ]
+}
+```
+
+When creating media entries, use these timestamps:
+```json
+{
+  "type": "logo",
+  "entity": "ollama.com",
+  "path": "media/logos/ollama_com.png",
+  "timestamp_start": 8.0,
+  "timestamp_end": 13.0,
+  "trigger_text": "Ollama"
+}
+```
+
+### If No Word-Level Timestamps Available
+
+If only clip-level info exists:
+1. Use `ffprobe` to get clip duration
+2. Watch/listen to the clip to identify key moments
+3. Estimate timestamps based on content flow
 
 ## Troubleshooting
 
