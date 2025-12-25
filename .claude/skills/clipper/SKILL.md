@@ -87,7 +87,7 @@ Create a file called `segments.json` with this structure:
 
 ```json
 {
-  "total_clips": 5,
+  "total_clips": 148,
   "clips": [
     {
       "start_index": 3,
@@ -98,17 +98,35 @@ Create a file called `segments.json` with this structure:
       "text": "Oh my god, that's incredible. Didn't know I could stream like that.",
       "reason": "High-energy reaction to discovering new streaming capability - genuine surprise moment",
       "category": "reaction",
+      "topic": "tiktok_streaming",
+      "subtopic": "vertical_discovery",
+      "keywords": ["tiktok", "streaming", "vertical", "discovery"],
       "confidence": 0.92,
       "suggested_title": "TikTok Vertical Streaming Discovery",
       "key_quote": "Oh my god, that's incredible."
     }
   ],
+  "compilations": [
+    {
+      "id": "comp_auth",
+      "title": "Complete Authentication Implementation",
+      "topic": "authentication",
+      "subtopics": ["oauth_setup", "token_config", "testing"],
+      "segment_indices": [5, 12, 34, 67, 89],
+      "total_segments": 5,
+      "talking_duration": 312.5,
+      "time_span": 3600.0,
+      "created_automatically": true
+    }
+  ],
   "metadata": {
     "total_sentences_analyzed": 4400,
     "total_duration": 24165.0,
-    "min_clip_length": 10,
-    "max_clip_length": 60,
-    "confidence_threshold": 0.6
+    "min_clip_length": 30,
+    "max_clip_length": 180,
+    "confidence_threshold": 0.6,
+    "individual_clips": 148,
+    "compilations_created": 12
   }
 }
 ```
@@ -173,41 +191,140 @@ When analyzing the transcription, identify segments that match these criteria:
 - **Confidence threshold**: Only include segments with confidence ≥ 0.6
 - **Context**: Consider including 10-30 seconds of setup/context before the key moment
 
+#### Topic and Keyword Extraction
+
+For each identified segment, extract hierarchical topics and keywords:
+
+**1. Extract Keywords (Automatic, No Hard-Coding)**
+- Identify capitalized proper nouns: "TikTok", "Redis", "OAuth", "MediaPipe"
+- Extract technical terms: "authentication", "database", "API", "deployment"
+- Find recurring noun phrases: "user login", "token validation", "cache setup"
+- Rank by prominence and select top 3-5 keywords
+
+**2. Determine Topic (Broad Category)**
+- Use most prominent keyword as topic
+- Convert to lowercase with underscores: "tiktok_api", "authentication", "redis_setup"
+- Topic represents the general subject area of the segment
+
+**3. Determine Subtopic (Specific Aspect)**
+- Identify specific action or aspect within the topic
+- Look for action words: "setup", "config", "debug", "deploy", "test", "install"
+- Combine with context: "oauth_setup", "token_validation", "cache_configuration"
+- Subtopic represents what you're doing with the topic
+
+**4. Example Topic Hierarchy**
+```
+Segment text: "So I'm setting up OAuth for the authentication system using Google's API..."
+Keywords: ["oauth", "authentication", "google", "api", "setup"]
+Topic: "authentication"
+Subtopic: "oauth_setup"
+```
+
+```
+Segment text: "The Redis cache is throwing errors when I try to deploy to production..."
+Keywords: ["redis", "cache", "errors", "deploy", "production"]
+Topic: "redis"
+Subtopic: "deployment_debugging"
+```
+
 #### Multi-step Process
 
-Since the parsed transcription may be large, analyze it in steps:
+Since the parsed transcription may be large, analyze it in steps with overlapping windows:
 
 1. **Get total count**: Read the parsed.json metadata to see total sentences
-2. **Analyze in windows**: Read sentences 0-100, then 100-200, etc.
-3. **Track all segments**: Keep a running list of all identified clips
-4. **Merge overlapping**: If clips overlap or are very close (within 5 seconds), keep the higher confidence one
-5. **Sort by confidence**: Final output should be sorted by confidence score (highest first)
-6. **Write output**: Create segments.json with all results
+
+2. **Analyze in overlapping windows**: Use 200-sentence windows with 50-sentence overlap
+   - Window 1: Sentences 0-200
+   - Window 2: Sentences 150-350 (50 overlap)
+   - Window 3: Sentences 300-500 (50 overlap)
+   - Continue until all sentences analyzed
+   - **Why overlap?** Prevents splitting trains of thought mid-context
+
+3. **Track all segments**: Keep a running list of all identified clips with topic/subtopic/keywords
+
+4. **Deduplicate segments**: If same segment appears in multiple windows
+   - Check for overlapping sentence ranges (e.g., 160-175 found in both Window 1 and 2)
+   - Keep only one instance (highest confidence version)
+   - Merge if boundaries slightly differ but clearly same segment
+
+5. **Group by topic**: Organize segments by their topic field
+   - Group all segments with topic="authentication"
+   - Group all segments with topic="redis"
+   - etc.
+
+6. **Create compilations automatically**: For each topic with 2+ segments
+   - Create compilation entry with:
+     - Unique ID (comp_auth, comp_redis, etc.)
+     - Title based on topic and subtopics
+     - List of segment indices (references to clips array)
+     - Total talking duration (sum of segment durations)
+     - Time span (from first to last segment)
+   - **Gap handling**: Gaps between segments are automatically removed during extraction
+   - If a gap contains another segment with the same topic, that segment is included
+
+7. **Sort clips**: Final clips array sorted by confidence score (highest first)
+
+8. **Write output**: Create segments.json with:
+   - All individual clips with topic/subtopic/keywords
+   - All compilations
+   - Updated metadata including compilation count
 
 #### Example Analysis Command Flow
 
 ```bash
-# User runs:
-python .claude/skills/clipper/scripts/parse_transcription.py video.json > parsed.json
+# User asks Claude:
+"Find interesting clips from my video"
 
-# Then user asks Claude:
-"Analyze parsed.json and find interesting clips"
+# Claude automatically:
+# 1. Checks if parsed.json exists, creates it if needed
+# 2. Reads parsed.json to understand structure (4400 sentences, 6.7 hours)
+# 3. Analyzes in overlapping windows:
+#    - Window 1: Sentences 0-200
+#    - Window 2: Sentences 150-350
+#    - Window 3: Sentences 300-500
+#    - ... (continues to end)
+# 4. For each segment: extracts keywords, determines topic/subtopic
+# 5. Deduplicates segments found in multiple windows
+# 6. Groups segments by topic
+# 7. Auto-creates compilations for topics with 2+ segments
+# 8. Writes segments.json with clips + compilations
+# 9. Reports summary:
+#    "Found 148 clips across 12 topics. Created 12 compilations."
+```
 
-# Claude then:
-# 1. Reads parsed.json to understand structure
-# 2. Analyzes sentences in windows
-# 3. Identifies all clip-worthy segments
-# 4. Writes segments.json with results
-# 5. Reports summary to user
+#### Example Analysis Output
+
+```
+Analysis complete! Found 148 individual clips.
+
+Topics detected:
+  • authentication (5 segments, 312s total) → Compilation created
+  • redis_setup (3 segments, 198s total) → Compilation created
+  • tiktok_api (4 segments, 256s total) → Compilation created
+  • mediapipe (6 segments, 445s total) → Compilation created
+  • frontend_debugging (2 segments, 128s total) → Compilation created
+  ... (7 more topics)
+
+Created 12 compilations automatically.
+
+Output saved to segments.json
+  - 148 individual clips
+  - 12 topic compilations
+
+Want to extract clips now?
 ```
 
 ### Step 3: Review Identified Segments
 
 After analysis, review `segments.json`:
-- Clips are sorted by confidence (highest first)
-- Each includes precise timestamps for video extraction
-- Category and reason explain why it's interesting
-- Suggested title for the clip
+- **Individual clips**: All identified segments sorted by confidence (highest first)
+- **Topic metadata**: Each clip includes topic, subtopic, and keywords
+- **Compilations**: Automatically created for topics with 2+ segments
+- Each segment includes:
+  - Precise timestamps for video extraction
+  - Category and reason explaining why it's interesting
+  - Hierarchical topic information
+  - Suggested title for the clip
 
 ### Step 4: Extract Video Clips (Automatic)
 
@@ -228,7 +345,9 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 - **Filler word removal**: Automatically removes "um", "uh", "ah", "like", etc.
 - **Silence removal**: Detects and removes gaps > 0.4s between words
 - **Clip combining**: Merges multi-part segments into single polished videos
-- **Length constraints**: Enforces 30s minimum, 3 minute maximum
+- **Compilation support**: Automatically creates topic-based compilations from multiple segments
+- **Smart gap handling**: Removes gaps between segments unless they contain relevant content
+- **Length constraints**: Individual clips 1-6 min, compilations can be longer
 - **FFmpeg integration**: Generates high-quality MP4 clips
 
 **Arguments:**
@@ -237,15 +356,28 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 3. `video.mp4` - Source video file
 4. `clips/` - Output directory (optional, defaults to "clips/")
 
-**How it works:**
+**How it works for individual clips:**
 1. Loads word-level timestamps from original transcription
 2. For each segment, removes filler words (um, uh, ah, etc.)
 3. Finds exact first/last words after filler removal
 4. Applies 0.1s safety buffer before first word and after last word
-5. Checks if total duration is within 30s-180s range
+5. Checks if total duration is within 60s-360s range
 6. Detects silence gaps > 0.4s between words
 7. Splits at silences and combines segments into one polished clip
 8. Extracts using ffmpeg and merges all parts seamlessly
+
+**How it works for compilations:**
+1. Reads compilation definition from segments.json
+2. Retrieves all referenced segments by index
+3. Sorts segments chronologically (by start_index)
+4. For each segment in the compilation:
+   - Applies same filler removal and precision logic as individual clips
+   - Extracts as temporary clip
+5. **Smart gap handling**: Gaps between segments are automatically removed
+   - Example: Segment A (0:10), Segment B (1:15) → Final clip is A+B with no 65-minute gap
+   - If gap contains relevant segments to the topic, those segments are already in the compilation
+6. Combines all segments into one long compilation clip
+7. Saves with "comp_" prefix: `comp_auth_Complete_Authentication.mp4`
 
 **Configuration** (edit extract_clips.py to adjust):
 - `SAFETY_BUFFER = 0.1` - Buffer before/after words (seconds)
@@ -256,10 +388,12 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 - `FILLER_WORDS` - Set of filler words to remove (um, uh, ah, er, hmm, etc.)
 
 **Output:**
-- Clips saved as `001_Clip_Title.mp4`, `002_Another_Clip.mp4`, etc.
+- Individual clips: `001_Clip_Title.mp4`, `002_Another_Clip.mp4`, etc.
+- Compilations: `comp_auth_Complete_Authentication.mp4`, `comp_redis_Redis_Setup.mp4`, etc.
 - Multi-part segments are combined into single files (no _part1, _part2)
-- Segments too short (<1min) or too long (>6min) are skipped
-- Summary stats printed: clips extracted, silences removed, fillers removed, skipped
+- Individual clips too short (<1min) or too long (>6min) are skipped
+- Compilations can exceed 6 minutes (contain multiple segments)
+- Summary stats printed: individual clips extracted, compilations created, silences removed, fillers removed, skipped
 
 ## What Makes a Good Clip?
 

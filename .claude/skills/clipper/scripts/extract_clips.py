@@ -276,6 +276,108 @@ def sanitize_filename(title: str) -> str:
     return safe[:100]
 
 
+def process_compilation(
+    compilation: Dict[str, Any],
+    clips: List[Dict],
+    word_map: Dict[int, List[Dict]],
+    video_file: str,
+    output_dir: str
+) -> Dict[str, Any]:
+    """
+    Process a compilation by combining multiple segments.
+
+    Args:
+        compilation: Compilation definition from segments.json
+        clips: Full clips array to reference segments
+        word_map: Word-level timestamps
+        video_file: Source video file
+        output_dir: Output directory
+
+    Returns:
+        Stats dictionary with extraction results
+    """
+    comp_id = compilation['id']
+    title = compilation['title']
+    segment_indices = compilation['segment_indices']
+
+    print(f"\n{'='*60}")
+    print(f"Processing compilation: {title}")
+    print(f"  Topic: {compilation['topic']}")
+    print(f"  Segments: {len(segment_indices)}")
+    print(f"{'='*60}")
+
+    stats = {
+        'segments_processed': 0,
+        'silences_removed': 0,
+        'fillers_removed': 0,
+        'failed': False
+    }
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_files = []
+
+            # Process each segment in the compilation
+            for seg_num, seg_idx in enumerate(segment_indices, 1):
+                segment = clips[seg_idx]
+                print(f"\n  [{seg_num}/{len(segment_indices)}] Processing: {segment['suggested_title'][:50]}...")
+
+                start_idx = segment['start_index']
+                end_idx = segment['end_index']
+
+                # Get precise boundaries
+                precise_start, precise_end, original_word_count = get_precise_boundaries(
+                    start_idx, end_idx, word_map
+                )
+
+                duration = precise_end - precise_start
+                print(f"    Duration: {duration:.1f}s (sentences {start_idx}-{end_idx})")
+
+                # Detect silences within this segment
+                silences = detect_silence_gaps(start_idx, end_idx, word_map)
+                if silences:
+                    print(f"    Found {len(silences)} silence gap(s)")
+                    stats['silences_removed'] += len(silences)
+
+                # Split at silences
+                subclips = split_at_silences(precise_start, precise_end, silences)
+
+                # Extract each sub-clip
+                for sub_idx, (sub_start, sub_end) in enumerate(subclips):
+                    temp_file = extract_temp_clip(
+                        video_file, sub_start, sub_end, temp_dir,
+                        len(temp_files)
+                    )
+                    temp_files.append(temp_file)
+
+                # Count filler words removed
+                all_words = []
+                for i in range(start_idx, end_idx + 1):
+                    all_words.extend(word_map.get(i, []))
+                filtered_words = remove_filler_words(all_words)
+                stats['fillers_removed'] += (len(all_words) - len(filtered_words))
+                stats['segments_processed'] += 1
+
+            # Combine all segments into one compilation
+            safe_title = sanitize_filename(title)
+            output_file = os.path.join(output_dir, f"{comp_id}_{safe_title}.mp4")
+
+            print(f"\n  Combining {len(temp_files)} segment(s) into compilation...")
+            if combine_clips(temp_files, output_file):
+                total_duration = compilation['talking_duration']
+                print(f"  ✓ Saved: {output_file} ({total_duration:.1f}s)")
+                return stats
+            else:
+                print(f"  ✗ Failed to combine segments")
+                stats['failed'] = True
+                return stats
+
+    except Exception as e:
+        print(f"  ✗ Error processing compilation: {e}")
+        stats['failed'] = True
+        return stats
+
+
 def process_segments(
     segments_file: str,
     transcription_file: str,
@@ -394,20 +496,62 @@ def process_segments(
             stats['failed'] += 1
             continue
 
+    # Process compilations if present
+    compilations = segments_data.get('compilations', [])
+    compilation_stats = {
+        'total_compilations': len(compilations),
+        'compilations_created': 0,
+        'compilation_segments': 0,
+        'compilation_silences': 0,
+        'compilation_fillers': 0,
+        'compilation_failed': 0
+    }
+
+    if compilations:
+        print(f"\n\n{'='*60}")
+        print(f"PROCESSING COMPILATIONS")
+        print(f"{'='*60}")
+        print(f"Found {len(compilations)} compilation(s) to create\n")
+
+        for comp in compilations:
+            comp_stats = process_compilation(
+                comp, clips, word_map, video_file, output_dir
+            )
+            if not comp_stats['failed']:
+                compilation_stats['compilations_created'] += 1
+                compilation_stats['compilation_segments'] += comp_stats['segments_processed']
+                compilation_stats['compilation_silences'] += comp_stats['silences_removed']
+                compilation_stats['compilation_fillers'] += comp_stats['fillers_removed']
+            else:
+                compilation_stats['compilation_failed'] += 1
+
     # Print summary
     print("\n" + "="*60)
     print("EXTRACTION SUMMARY")
     print("="*60)
-    print(f"Total segments:         {stats['total_segments']}")
-    print(f"Clips extracted:        {stats['clips_extracted']}")
-    print(f"Segments combined:      {stats['segments_combined']}")
-    print(f"Silences removed:       {stats['silences_removed']}")
-    print(f"Filler words removed:   {stats['fillers_removed']}")
-    print(f"Skipped (too short):    {stats['skipped_too_short']}")
-    print(f"Skipped (too long):     {stats['skipped_too_long']}")
-    print(f"Failed:                 {stats['failed']}")
+    print(f"Individual Clips:")
+    print(f"  Total segments:         {stats['total_segments']}")
+    print(f"  Clips extracted:        {stats['clips_extracted']}")
+    print(f"  Segments combined:      {stats['segments_combined']}")
+    print(f"  Silences removed:       {stats['silences_removed']}")
+    print(f"  Filler words removed:   {stats['fillers_removed']}")
+    print(f"  Skipped (too short):    {stats['skipped_too_short']}")
+    print(f"  Skipped (too long):     {stats['skipped_too_long']}")
+    print(f"  Failed:                 {stats['failed']}")
+
+    if compilations:
+        print(f"\nCompilations:")
+        print(f"  Total compilations:     {compilation_stats['total_compilations']}")
+        print(f"  Compilations created:   {compilation_stats['compilations_created']}")
+        print(f"  Segments combined:      {compilation_stats['compilation_segments']}")
+        print(f"  Silences removed:       {compilation_stats['compilation_silences']}")
+        print(f"  Filler words removed:   {compilation_stats['compilation_fillers']}")
+        print(f"  Failed:                 {compilation_stats['compilation_failed']}")
+
     print(f"\nOutput directory: {output_dir}/")
-    print(f"Length range: {MIN_CLIP_LENGTH}s - {MAX_CLIP_LENGTH}s")
+    print(f"Individual clip length range: {MIN_CLIP_LENGTH}s - {MAX_CLIP_LENGTH}s")
+    if compilations:
+        print(f"Compilations can exceed max length (multi-segment)")
     print("="*60)
 
 

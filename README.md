@@ -14,19 +14,24 @@ Simply ask Claude:
 Claude will automatically:
 1. ✅ Parse your transcription (if needed)
 2. ✅ Analyze it to find clip-worthy moments
-3. ✅ Create `segments.json` with all clips and metadata
-4. ✅ Ask if you want to extract the clips
-5. ✅ Extract all clips with word-level precision
+3. ✅ Extract topics and keywords from your content
+4. ✅ Create automatic compilations for related segments
+5. ✅ Create `segments.json` with all clips and compilations
+6. ✅ Ask if you want to extract the clips
+7. ✅ Extract all clips and compilations with word-level precision
 
 **No API setup needed!** Claude Code handles everything - no extra API keys or costs.
 
 Automatically extracts all clips with:
 - **Word-level precision** - Uses exact word timestamps, not sentence timestamps
 - **0.1s safety buffer** - Prevents clipping inside words
+- **Hierarchical topic extraction** - Automatically identifies topics and subtopics from content
+- **Automatic compilations** - Combines related segments on the same topic into longer clips
+- **Smart gap handling** - Removes gaps between segments in compilations
 - **Filler word removal** - Strips out "um", "uh", "ah", "like", etc.
 - **Silence removal** - Removes gaps > 0.4s between words
 - **Clip combining** - Merges multi-part segments into single polished videos
-- **Length constraints** - Only creates clips between 1 minute and 6 minutes for better context
+- **Length constraints** - Individual clips 1-6 min, compilations can be longer
 - **High quality** - Re-encodes with H.264 for perfect timing
 
 ## What It Does
@@ -42,9 +47,37 @@ The skill analyzes video transcriptions to identify:
 Each identified segment includes:
 - Precise start/end timestamps
 - Category and reason for selection
+- Hierarchical topic information (topic, subtopic, keywords)
 - Confidence score (0.0-1.0)
 - Suggested clip title
 - Key quote
+
+## Topics & Compilations
+
+The skill automatically organizes clips by topic and creates compilations:
+
+**Hierarchical Topics:**
+- **Topic**: Broad category (e.g., "authentication", "redis_setup", "tiktok_api")
+- **Subtopic**: Specific aspect (e.g., "oauth_setup", "deployment_debugging")
+- **Keywords**: 3-5 key terms extracted from the segment
+
+**Automatic Compilations:**
+- When 2+ segments share the same topic, a compilation is automatically created
+- Compilations combine all related segments into one long-form clip
+- Gaps between segments are removed (smart gap handling)
+- Perfect for creating comprehensive tutorials from scattered discussions
+
+**Example:**
+```
+You discuss authentication at:
+  - 0:10-0:15 (OAuth setup)
+  - 0:45-0:52 (Token configuration)
+  - 1:30-1:40 (Testing)
+
+Result:
+  • 3 individual clips (if each meets length requirements)
+  • 1 compilation: "Complete Authentication Implementation" (~8 minutes, no gaps)
+```
 
 ## How It Works
 
@@ -59,10 +92,13 @@ When you ask Claude to find clips from your video, it automatically:
 
 **Step 2: Analyze for Clip-Worthy Moments**
 Claude reads the parsed transcription and:
-1. Analyzes sentences in manageable windows
+1. Analyzes sentences in overlapping windows (50-sentence overlap to preserve context)
 2. Identifies clip-worthy moments based on 7 categories
-3. Assigns confidence scores
-4. Creates `segments.json` with all results
+3. Extracts topics, subtopics, and keywords from each segment
+4. Groups segments by topic
+5. Auto-creates compilations for topics with 2+ segments
+6. Assigns confidence scores
+7. Creates `segments.json` with all clips and compilations
 
 **Why this approach?**
 - ✅ No API costs - uses Claude Code itself
@@ -74,7 +110,9 @@ Claude reads the parsed transcription and:
 Claude asks if you want clips extracted, then automatically:
 - Detects your video file (looks for `*.mp4`, `*.mov`, etc.)
 - Runs `extract_clips.py` with the right parameters
-- Extracts all clips to `clips/` directory
+- Extracts all individual clips to `clips/` directory
+- Extracts all compilations (multi-segment clips with gaps removed)
+- Outputs both individual clips (001_Title.mp4) and compilations (comp_auth_Title.mp4)
 
 **Features:**
 - Uses word-level timestamps for frame-perfect accuracy
@@ -115,7 +153,7 @@ After Claude analyzes your transcription, `segments.json` will contain:
 
 ```json
 {
-  "total_clips": 15,
+  "total_clips": 148,
   "clips": [
     {
       "start_index": 3,
@@ -126,17 +164,35 @@ After Claude analyzes your transcription, `segments.json` will contain:
       "text": "Oh my god, that's incredible. Didn't know I could stream like that.",
       "reason": "High-energy reaction to discovering new streaming capability",
       "category": "reaction",
+      "topic": "tiktok_streaming",
+      "subtopic": "vertical_discovery",
+      "keywords": ["tiktok", "streaming", "vertical", "discovery"],
       "confidence": 0.92,
       "suggested_title": "TikTok Vertical Streaming Discovery",
       "key_quote": "Oh my god, that's incredible."
     }
   ],
+  "compilations": [
+    {
+      "id": "comp_auth",
+      "title": "Complete Authentication Implementation",
+      "topic": "authentication",
+      "subtopics": ["oauth_setup", "token_config", "testing"],
+      "segment_indices": [5, 12, 34, 67, 89],
+      "total_segments": 5,
+      "talking_duration": 312.5,
+      "time_span": 3600.0,
+      "created_automatically": true
+    }
+  ],
   "metadata": {
     "total_sentences_analyzed": 4400,
     "total_duration": 24165.0,
-    "min_clip_length": 10,
-    "max_clip_length": 60,
-    "confidence_threshold": 0.6
+    "min_clip_length": 30,
+    "max_clip_length": 180,
+    "confidence_threshold": 0.6,
+    "individual_clips": 148,
+    "compilations_created": 12
   }
 }
 ```
@@ -266,10 +322,14 @@ Just ask Claude in natural language:
 or
 
 ```
-"Analyze my video transcription and find the top 10 most interesting clips"
+"Analyze my video transcription and find interesting clips"
 ```
 
-Claude handles everything automatically! No manual script running needed.
+Claude automatically:
+- Finds all clip-worthy moments
+- Extracts topics and keywords
+- Creates compilations for related segments
+- Handles everything with zero manual intervention!
 
 ## Why This Approach?
 
