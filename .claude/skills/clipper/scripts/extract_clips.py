@@ -28,7 +28,8 @@ SAFETY_BUFFER = 0.1  # seconds to add before/after words
 SILENCE_THRESHOLD = 0.4  # seconds - gaps larger than this are considered silence
 MIN_CLIP_LENGTH = 60.0  # seconds - minimum total clip length (1 minute)
 MAX_CLIP_LENGTH = 360.0  # seconds - maximum total clip length (6 minutes)
-MIN_SUBCLIP_LENGTH = 3.0  # seconds - minimum length for a sub-clip segment
+MIN_SUBCLIP_LENGTH = 0.5  # seconds - minimum length for a sub-clip segment (lowered to preserve short intro/outro sentences)
+MIN_FIRST_LAST_SUBCLIP = 0.2  # seconds - even shorter threshold for first/last segments
 
 # Filler words to remove (case-insensitive)
 FILLER_WORDS = {
@@ -162,8 +163,8 @@ def split_at_silences(
     Split a segment into sub-clips by removing silence gaps.
 
     Args:
-        start_time: Segment start time
-        end_time: Segment end time
+        start_time: Segment start time (already has safety buffer applied)
+        end_time: Segment end time (already has safety buffer applied)
         silences: List of (gap_start, gap_end) tuples to remove
 
     Returns:
@@ -174,21 +175,34 @@ def split_at_silences(
 
     subclips = []
     current_start = start_time
+    is_first = True
 
     for silence_start, silence_end in sorted(silences):
         # Add sub-clip before this silence
         if silence_start > current_start:
             duration = silence_start - current_start
-            if duration >= MIN_SUBCLIP_LENGTH:
-                subclips.append((current_start, silence_start))
 
-        # Next sub-clip starts after the silence
-        current_start = silence_end
+            # First segment: use lower threshold to preserve intro context
+            if is_first:
+                if duration >= MIN_FIRST_LAST_SUBCLIP:
+                    # Add safety buffer at the end of this subclip
+                    subclips.append((current_start, silence_start + SAFETY_BUFFER))
+                    is_first = False
+            # Middle segments: use normal threshold
+            elif duration >= MIN_SUBCLIP_LENGTH:
+                subclips.append((current_start, silence_start + SAFETY_BUFFER))
+
+        # Next sub-clip starts after the silence with safety buffer
+        current_start = max(0, silence_end - SAFETY_BUFFER)
 
     # Add final sub-clip after last silence
+    # Last segment: use lower threshold to preserve outro context
     if end_time > current_start:
         duration = end_time - current_start
-        if duration >= MIN_SUBCLIP_LENGTH:
+        # If this is the first segment (no silences processed) or last segment
+        if is_first or duration >= MIN_FIRST_LAST_SUBCLIP:
+            subclips.append((current_start, end_time))
+        elif duration >= MIN_SUBCLIP_LENGTH:
             subclips.append((current_start, end_time))
 
     return subclips

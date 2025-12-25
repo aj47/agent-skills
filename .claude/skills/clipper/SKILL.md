@@ -384,7 +384,8 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 - `SILENCE_THRESHOLD = 0.4` - Min gap to consider silence (seconds)
 - `MIN_CLIP_LENGTH = 60.0` - Minimum total clip length (1 minute)
 - `MAX_CLIP_LENGTH = 360.0` - Maximum total clip length (6 minutes)
-- `MIN_SUBCLIP_LENGTH = 3.0` - Min length for sub-clip segments (seconds)
+- `MIN_SUBCLIP_LENGTH = 0.5` - Min length for middle sub-clip segments (seconds)
+- `MIN_FIRST_LAST_SUBCLIP = 0.2` - Min length for first/last segments to preserve context
 - `FILLER_WORDS` - Set of filler words to remove (um, uh, ah, er, hmm, etc.)
 
 **Output:**
