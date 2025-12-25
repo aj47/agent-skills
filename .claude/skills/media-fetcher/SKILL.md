@@ -98,15 +98,29 @@ Requires `GIPHY_API_KEY` environment variable.
 
 #### Landing Pages (Products/Services Mentioned)
 
-Use Playwright MCP directly:
+Use the capture_screenshot.py script which **automatically matches video dimensions**:
 
-1. `browser_navigate` to the URL
-2. Wait for page load
-3. Dismiss cookie banners if present
-4. `browser_screenshot` to capture
-5. Save screenshot to `media/screenshots/`
+```bash
+# Auto-detect dimensions from a clip video file
+python .claude/skills/media-fetcher/scripts/capture_screenshot.py \
+    "https://github.com/aj47/SpeakMCP" \
+    "https://speakmcp.com" \
+    --video clips/001_Example.mp4 \
+    --output media/screenshots/
 
-**Example Playwright MCP workflow:**
+# Or specify dimensions directly
+python .claude/skills/media-fetcher/scripts/capture_screenshot.py \
+    "https://vercel.com" \
+    --width 1080 --height 1920
+```
+
+**Dimension Matching:**
+- Screenshots match your clip video dimensions exactly (ready for overlay)
+- Default: Portrait 1080x1920 (9:16 for TikTok/Reels/Shorts)
+- Uses ffprobe to detect video dimensions automatically
+- Captures viewport only (not full page) to maintain exact dimensions
+
+**Alternative: Use Playwright MCP directly** for interactive capture:
 ```
 1. browser_navigate("https://vercel.com")
 2. [Claude sees the page, decides to dismiss cookie banner]
@@ -255,6 +269,30 @@ python .claude/skills/media-fetcher/scripts/render_diagram.py <input.mmd> [--out
 - `--output`: Output directory (default: "media/diagrams/")
 
 **Requires:** `@mermaid-js/mermaid-cli` (mmdc) installed
+
+### capture_screenshot.py
+
+Captures screenshots with dimensions matching your video clips.
+
+```bash
+python .claude/skills/media-fetcher/scripts/capture_screenshot.py <url1> [url2...] [options]
+```
+
+**Arguments:**
+- `urls`: One or more URLs to capture
+- `--video, -v`: Video file to match dimensions from (uses ffprobe)
+- `--width, -W`: Viewport width (default: 1080)
+- `--height, -H`: Viewport height (default: 1920)
+- `--output, -o`: Output directory (default: "media/screenshots/")
+
+**Features:**
+- Auto-detects video dimensions via ffprobe
+- Default: Portrait 1080x1920 (9:16 ratio for TikTok/Reels/Shorts)
+- Auto-dismisses cookie banners and popups
+- 2x device scale for retina quality
+- Viewport-only capture (matches exact dimensions)
+
+**Requires:** `playwright` Python package, Chromium browser
 
 ## Using Playwright MCP for Browser Tasks
 
