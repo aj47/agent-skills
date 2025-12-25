@@ -253,6 +253,40 @@ MIN_CLIP_LENGTH = 60.0  # Minimum total clip length (1 minute)
 MAX_CLIP_LENGTH = 360.0 # Maximum total clip length (6 minutes)
 ```
 
+### Post-Processing: Cleanup (Optional)
+
+After extracting coherent clips, you can optionally clean them up by removing filler words and silences:
+
+```bash
+python .claude/skills/clipper/scripts/cleanup_clips.py segments.json out.json "video.mp4" clips/ [cleaned/]
+```
+
+**This is Phase 3 of the pipeline:**
+- **Phase 1 (Analysis):** Identify coherent segments with complete sentences
+- **Phase 2 (Extraction):** Extract exactly what analysis identified
+- **Phase 3 (Cleanup):** Remove fillers and silences ← optional post-processing
+
+**Features:**
+- Removes filler words (um, uh, ah, like, etc.)
+- Removes silences greater than 0.4s
+- Combines remaining parts into polished clips
+- Preserves coherent sentence structure from Phase 2
+
+**Configuration:**
+
+Edit `scripts/cleanup_clips.py` to adjust:
+
+```python
+SAFETY_BUFFER = 0.1       # Buffer before/after cuts (seconds)
+SILENCE_THRESHOLD = 0.4   # Min gap to consider silence (seconds)
+MIN_SEGMENT_LENGTH = 0.3  # Min segment length to keep (seconds)
+FILLER_WORDS = {...}      # Set of filler words to remove
+```
+
+**Output:**
+- Original clips preserved in `clips/`
+- Cleaned clips saved to `clips/cleaned/` (or specified output directory)
+
 ### Manual Extraction (Alternative)
 
 If you prefer manual control, use ffmpeg directly:
@@ -290,7 +324,8 @@ Claude will automatically detect your transcription and video files, handle all 
 ├── EXAMPLES.md           # Usage examples
 └── scripts/
     ├── parse_transcription.py   # Parse JSON transcription
-    └── extract_clips.py         # Extract clips with precision & silence removal
+    ├── extract_clips.py         # Phase 2: Extract coherent clips
+    └── cleanup_clips.py         # Phase 3: Remove fillers & silences (optional)
 ```
 
 ## Requirements

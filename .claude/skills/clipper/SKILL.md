@@ -47,6 +47,12 @@ When user asks to find clips, follow this exact sequence:
 - [ ] Run: `python .claude/skills/clipper/scripts/extract_clips.py segments.json <transcription> <video> clips/`
 - [ ] Monitor output and report results
 
+**E. Cleanup (optional post-processing)**
+- [ ] Ask user if they want to clean up clips (remove fillers and silences)
+- [ ] If yes, run: `python .claude/skills/clipper/scripts/cleanup_clips.py segments.json <transcription> <video> clips/`
+- [ ] Cleaned clips are saved to `clips/cleaned/`
+- [ ] Report cleanup stats (fillers removed, silences removed, time saved)
+
 ## Workflow
 
 ### Step 1: Parse Transcription (Automatic)
@@ -453,11 +459,8 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 **Features:**
 - **Word-level precision**: Uses word timestamps for exact boundaries
 - **Safety buffer**: Adds 0.1s before/after to avoid clipping inside words
-- **Filler word removal**: Automatically removes "um", "uh", "ah", "like", etc.
-- **Silence removal**: Detects and removes gaps > 0.4s between words
-- **Clip combining**: Merges multi-part segments into single polished videos
+- **Coherent extraction**: Extracts exactly what analysis identified (no splitting)
 - **Compilation support**: Automatically creates topic-based compilations from multiple segments
-- **Smart gap handling**: Removes gaps between segments unless they contain relevant content
 - **Length constraints**: Individual clips 1-6 min, compilations can be longer
 - **FFmpeg integration**: Generates high-quality MP4 clips
 
@@ -469,43 +472,71 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 
 **How it works for individual clips:**
 1. Loads word-level timestamps from original transcription
-2. For each segment, removes filler words (um, uh, ah, etc.)
-3. Finds exact first/last words after filler removal
-4. Applies 0.1s safety buffer before first word and after last word
-5. Checks if total duration is within 60s-360s range
-6. Detects silence gaps > 0.4s between words
-7. Splits at silences and combines segments into one polished clip
-8. Extracts using ffmpeg and merges all parts seamlessly
+2. For each segment, finds first and last words from sentence boundaries
+3. Applies 0.1s safety buffer before first word and after last word
+4. Checks if total duration is within 60s-360s range
+5. Extracts one continuous clip using ffmpeg
+6. Preserves natural speech flow with no splitting
 
 **How it works for compilations:**
 1. Reads compilation definition from segments.json
 2. Retrieves all referenced segments by index
 3. Sorts segments chronologically (by start_index)
 4. For each segment in the compilation:
-   - Applies same filler removal and precision logic as individual clips
-   - Extracts as temporary clip
-5. **Smart gap handling**: Gaps between segments are automatically removed
-   - Example: Segment A (0:10), Segment B (1:15) → Final clip is A+B with no 65-minute gap
-   - If gap contains relevant segments to the topic, those segments are already in the compilation
-6. Combines all segments into one long compilation clip
+   - Extracts as coherent temporary clip
+5. Combines all segments into one long compilation clip
+6. Gaps between segments are automatically removed
 7. Saves with "comp_" prefix: `comp_auth_Complete_Authentication.mp4`
 
 **Configuration** (edit extract_clips.py to adjust):
 - `SAFETY_BUFFER = 0.1` - Buffer before/after words (seconds)
-- `SILENCE_THRESHOLD = 0.4` - Min gap to consider silence (seconds)
 - `MIN_CLIP_LENGTH = 60.0` - Minimum total clip length (1 minute)
 - `MAX_CLIP_LENGTH = 360.0` - Maximum total clip length (6 minutes)
-- `MIN_SUBCLIP_LENGTH = 0.5` - Min length for middle sub-clip segments (seconds)
-- `MIN_FIRST_LAST_SUBCLIP = 0.2` - Min length for first/last segments to preserve context
-- `FILLER_WORDS` - Set of filler words to remove (um, uh, ah, er, hmm, etc.)
 
 **Output:**
 - Individual clips: `001_Clip_Title.mp4`, `002_Another_Clip.mp4`, etc.
 - Compilations: `comp_auth_Complete_Authentication.mp4`, `comp_redis_Redis_Setup.mp4`, etc.
-- Multi-part segments are combined into single files (no _part1, _part2)
 - Individual clips too short (<1min) or too long (>6min) are skipped
 - Compilations can exceed 6 minutes (contain multiple segments)
-- Summary stats printed: individual clips extracted, compilations created, silences removed, fillers removed, skipped
+- Summary stats printed: individual clips extracted, compilations created, skipped
+
+### Step 5: Cleanup Clips (Optional Post-Processing)
+
+After extracting coherent clips, optionally clean them up by removing filler words and silences:
+
+```bash
+python .claude/skills/clipper/scripts/cleanup_clips.py segments.json <original_transcription> <video_file> clips/
+```
+
+**This is a SEPARATE post-processing phase:**
+- Phase 1 (Analysis): Identify coherent segments with complete sentences ✓
+- Phase 2 (Extraction): Extract exactly what analysis identified ✓
+- Phase 3 (Cleanup): Remove fillers and silences ← THIS STEP
+
+**Features:**
+- **Filler word removal**: Removes "um", "uh", "ah", "like", etc.
+- **Silence removal**: Detects and removes gaps > 0.4s between words
+- **Segment combining**: Merges remaining parts into polished clips
+- **Preserves coherence**: Only removes fillers/silences, maintains sentence structure
+
+**How it works:**
+1. For each extracted clip, loads word-level timestamps
+2. Identifies and removes filler words
+3. Detects silence gaps > 0.4s between remaining words
+4. Re-extracts from original video, skipping fillers and silences
+5. Combines remaining segments into cleaned clip
+6. Saves to `clips/cleaned/` directory
+
+**Configuration** (edit cleanup_clips.py to adjust):
+- `SAFETY_BUFFER = 0.1` - Buffer before/after cuts (seconds)
+- `SILENCE_THRESHOLD = 0.4` - Min gap to consider silence (seconds)
+- `MIN_SEGMENT_LENGTH = 0.3` - Min segment length to keep (seconds)
+- `FILLER_WORDS` - Set of filler words to remove
+
+**Output:**
+- Original clips preserved in `clips/`
+- Cleaned clips saved to `clips/cleaned/`
+- Summary stats: fillers removed, silences removed, time saved
 
 ## What Makes a Good Clip?
 
