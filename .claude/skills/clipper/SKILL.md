@@ -19,8 +19,8 @@ You will automatically:
 1. Detect the transcription file (usually `out.json` or `*.json`)
 2. Check if `parsed.json` exists, if not, run the parse script
 3. Analyze `parsed.json` and create `segments.json`
-4. Ask user if they want clips extracted
-5. If yes, run extraction script automatically
+4. Detect video file and run extraction script
+5. Run cleanup script to remove fillers and silences
 
 ## Execution Checklist
 
@@ -41,15 +41,13 @@ When user asks to find clips, follow this exact sequence:
 - [ ] Write results to `segments.json`
 - [ ] Report summary to user (number of clips found, categories, etc.)
 
-**D. Extract (optional)**
-- [ ] Ask user if they want to extract clips now
-- [ ] If yes, detect video file (`*.mp4`, `*.mov`, `*.mkv`)
+**D. Extract (automatic)**
+- [ ] Detect video file (`*.mp4`, `*.mov`, `*.mkv`)
 - [ ] Run: `python .claude/skills/clipper/scripts/extract_clips.py segments.json <transcription> <video> clips/`
 - [ ] Monitor output and report results
 
-**E. Cleanup (optional post-processing)**
-- [ ] Ask user if they want to clean up clips (remove fillers and silences)
-- [ ] If yes, run: `python .claude/skills/clipper/scripts/cleanup_clips.py segments.json <transcription> <video> clips/`
+**E. Cleanup (automatic)**
+- [ ] Run: `python .claude/skills/clipper/scripts/cleanup_clips.py segments.json <transcription> <video> clips/`
 - [ ] Cleaned clips are saved to `clips/cleaned/`
 - [ ] Report cleanup stats (fillers removed, silences removed, time saved)
 
@@ -428,7 +426,7 @@ Output saved to segments.json
   - 148 individual clips
   - 12 topic compilations
 
-Want to extract clips now?
+Extracting clips...
 ```
 
 ### Step 3: Review Identified Segments
@@ -445,7 +443,7 @@ After analysis, review `segments.json`:
 
 ### Step 4: Extract Video Clips (Automatic)
 
-After creating `segments.json`, ask the user if they want to extract the clips. If yes, automatically detect the video file and run:
+After creating `segments.json`, automatically detect the video file and run:
 
 ```bash
 python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_transcription> <video_file> clips/
@@ -500,18 +498,18 @@ python .claude/skills/clipper/scripts/extract_clips.py segments.json <original_t
 - Compilations can exceed 6 minutes (contain multiple segments)
 - Summary stats printed: individual clips extracted, compilations created, skipped
 
-### Step 5: Cleanup Clips (Optional Post-Processing)
+### Step 5: Cleanup Clips (Automatic)
 
-After extracting coherent clips, optionally clean them up by removing filler words and silences:
+After extracting clips, automatically clean them up by removing filler words and silences:
 
 ```bash
 python .claude/skills/clipper/scripts/cleanup_clips.py segments.json <original_transcription> <video_file> clips/
 ```
 
-**This is a SEPARATE post-processing phase:**
+**This is an automatic post-processing phase:**
 - Phase 1 (Analysis): Identify coherent segments with complete sentences ✓
 - Phase 2 (Extraction): Extract exactly what analysis identified ✓
-- Phase 3 (Cleanup): Remove fillers and silences ← THIS STEP
+- Phase 3 (Cleanup): Remove fillers and silences ✓ ← THIS STEP
 
 **Features:**
 - **Filler word removal**: Removes "um", "uh", "ah", "like", etc.
