@@ -12,7 +12,7 @@ Usage:
     # Multiple URLs
     python capture_screenshot.py url1 url2 url3 --video video.mp4 --output media/screenshots/
 
-Default: Portrait 1080x1920 (9:16 ratio for TikTok/Reels/Shorts)
+Default: Landscape 1200x675 (16:9 ratio for X/Twitter)
 """
 
 import argparse
@@ -32,9 +32,9 @@ except ImportError:
     from playwright.async_api import async_playwright
 
 
-# Default to portrait (TikTok/Reels/Shorts format)
-DEFAULT_WIDTH = 1080
-DEFAULT_HEIGHT = 1920
+# Default to landscape (X/Twitter optimized - 16:9 ratio)
+DEFAULT_WIDTH = 1200
+DEFAULT_HEIGHT = 675
 
 
 def get_video_dimensions(video_path: str) -> tuple[int, int]:
