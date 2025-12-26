@@ -18,8 +18,9 @@ User: "Extract X posts from my stream"
 You will automatically:
 1. Detect the transcription file and check for `parsed.json`
 2. Scan for trigger phrases and score moments
-3. Generate posts/threads with media requests
-4. Output to `x_posts.json`
+3. Generate posts/threads
+4. Fetch media (screenshots, video clips, logos)
+5. Output to `x_posts_output/` folder with copy-paste ready files
 
 ## Inputs Required
 
@@ -58,10 +59,46 @@ For each high-scoring moment:
 - [ ] Run quality checklist
 - [ ] Add to output
 
-### Phase 4: Write Output
+### Phase 4: Fetch Media (Automatic)
 
-- [ ] Write `x_posts.json` with all extracted posts/threads
-- [ ] Report summary to user (posts found, priority breakdown, topics)
+For each post, automatically fetch the required media:
+
+- [ ] Create output directory: `mkdir -p x_posts_output`
+- [ ] **Screenshots**: For any URLs mentioned (tools, websites):
+  ```bash
+  python .claude/skills/media-fetcher/scripts/capture_screenshot.py "<url>" --output x_posts_output/
+  ```
+- [ ] **Video clips**: Extract from stream recording using ffmpeg:
+  ```bash
+  ffmpeg -y -ss <start_time> -i "<video_file>" -t <duration> -c:v libx264 -c:a aac -preset fast x_posts_output/<post_number>_<topic>_clip.mp4
+  ```
+- [ ] **Logos**: For companies/products mentioned:
+  ```bash
+  python .claude/skills/media-fetcher/scripts/fetch_logos.py "<domain>" --output x_posts_output/
+  ```
+
+### Phase 5: Write Output (Copy-Paste Ready)
+
+Create `x_posts_output/` folder with:
+
+- [ ] **Individual text files**: One `.txt` file per post with plain text (no escape characters)
+  - Format: `01_topic_name.txt`, `02_topic_name.txt`, etc.
+  - Content: Ready to copy-paste directly to Twitter
+- [ ] **README.md**: Summary with all posts in code blocks for easy copying
+- [ ] **Media files**: Screenshots, clips, and logos named to match posts
+- [ ] Report summary to user
+
+**Output Structure:**
+```
+x_posts_output/
+├── README.md                    # All posts with copy-paste blocks
+├── 01_topic_name.txt           # Post 1 text
+├── 01_topic_name_clip.mp4      # Post 1 video clip
+├── screenshot_or_logo.png      # Post 1 image
+├── 02_topic_name.txt           # Post 2 text
+├── 02_topic_name_clip.mp4      # Post 2 video clip
+└── ...
+```
 
 ---
 
@@ -150,98 +187,77 @@ Do NOT extract moments that are:
 
 ## Output Format
 
-Create `x_posts.json` with this structure:
+Create `x_posts_output/` folder with copy-paste ready files:
 
-```json
-{
-  "total_extractions": 5,
-  "posts": [
-    {
-      "type": "post",
-      "priority": "high",
-      "source": {
-        "start_time": "00:42:15",
-        "end_time": "00:42:52",
-        "start_index": 156,
-        "end_index": 162
-      },
-      "topic": "Aide (Cursor alternative)",
-      "content": "Aide just autocompleted an entire function on first try.\n\nFree. Open source. Runs locally.\n\nAnother Cursor alternative worth watching.\n\nCheck it out: [link]",
-      "media": {
-        "type": "screen clip",
-        "timestamp_start": "00:42:31",
-        "timestamp_end": "00:42:52",
-        "focus": "the autocomplete moment",
-        "crop_notes": "show the before (empty function) and after (completed)"
-      },
-      "notes": "Strong discovery moment with multiple value props. Good candidate for morning post.",
-      "quality_checks": {
-        "hook_in_first_10_words": true,
-        "no_banned_first_word": true,
-        "tool_in_first_50_words": true,
-        "has_value_prop": true,
-        "has_action_cta": true,
-        "avg_sentence_under_25_words": true,
-        "media_request_specific": true
-      },
-      "score_breakdown": {
-        "tool_with_result": 5,
-        "total": 5
-      }
-    }
-  ],
-  "threads": [
-    {
-      "type": "thread",
-      "priority": "high",
-      "source": {
-        "start_time": "00:15:00",
-        "end_time": "00:28:00",
-        "segments": [
-          {"start": "00:15:00", "end": "00:18:00"},
-          {"start": "00:20:30", "end": "00:23:00"},
-          {"start": "00:25:00", "end": "00:28:00"}
-        ]
-      },
-      "topic": "AI coding tool comparison",
-      "tweets": [
-        "1/ Tested 3 Cursor alternatives this week.\n\nOne of them is mass sleeping on.\n\nHere's what I found",
-        "2/ Aide\n\nFree, open source, runs locally.\n\nAutocomplete is surprisingly good—completed entire functions without context.\n\nThe local-first approach means your code never leaves your machine.",
-        "3/ [Tool 2]\n\n[Key differentiator]\n\n[Specific result or metric]\n\n[One honest limitation]",
-        "4/ [Tool 3]\n\n[Key differentiator]\n\n[Specific result or metric]\n\n[One honest limitation]",
-        "5/ The verdict:\n\n[Tool X] for [use case].\n[Tool Y] for [use case].\n[Tool Z] if you need [specific thing].\n\nAll free. All open source. Try them yourself."
-      ],
-      "media": {
-        "type": "before-after screenshots",
-        "timestamps": ["00:16:30", "00:21:15", "00:26:00"],
-        "focus": "autocomplete/generation result from each tool",
-        "crop_notes": "consistent framing across all 3 for comparison"
-      },
-      "notes": "Comparison threads perform well. Schedule for Tuesday-Thursday morning.",
-      "quality_checks": {
-        "hook_tweet_compels_expand": true,
-        "each_tweet_standalone": true,
-        "max_7_tweets": true,
-        "no_filler_tweets": true
-      }
-    }
-  ],
-  "metadata": {
-    "stream_title": "Testing AI Coding Tools Live",
-    "stream_date": "2025-01-15",
-    "total_sentences_scanned": 4400,
-    "total_duration": "6:42:45",
-    "moments_detected": 15,
-    "posts_extracted": 3,
-    "threads_extracted": 2,
-    "skipped": {
-      "off_topic": 2,
-      "incomplete": 3,
-      "duplicate": 1,
-      "low_priority": 4
-    }
-  }
-}
+### Individual Post Files (`.txt`)
+
+Each post gets its own text file with plain text ready to copy:
+
+**`01_aide_cursor_alternative.txt`:**
+```
+Aide just autocompleted an entire function on first try.
+
+Free. Open source. Runs locally.
+
+Another Cursor alternative worth watching.
+
+Check it out: [link]
+```
+
+### README.md Summary
+
+The README contains all posts in code blocks for quick copying:
+
+```markdown
+# X Posts - [Stream Title]
+
+## Post 1: Aide (HIGH PRIORITY)
+
+**Copy this:**
+\```
+Aide just autocompleted an entire function on first try.
+
+Free. Open source. Runs locally.
+
+Another Cursor alternative worth watching.
+
+Check it out: [link]
+\```
+
+**Media:**
+- Video clip: `01_aide_clip.mp4`
+- Screenshot: `aide.com.png`
+
+---
+
+## Post 2: [Next Topic]
+...
+```
+
+### Thread Files
+
+For threads, create a single file with all tweets separated by `---`:
+
+**`02_cursor_alternatives_thread.txt`:**
+```
+1/ Tested 3 Cursor alternatives this week.
+
+One of them is mass sleeping on.
+
+Here's what I found
+
+---
+
+2/ Aide
+
+Free, open source, runs locally.
+
+Autocomplete is surprisingly good—completed entire functions without context.
+
+---
+
+3/ [Next tweet]
+...
 ```
 
 ---
@@ -297,7 +313,8 @@ Since transcripts can be large, analyze in overlapping windows:
 4. **Deduplicate**: Same topic in multiple windows → keep highest scoring
 5. **Rank and select**: Sort by score, take top 2-4 per hour of stream
 6. **Generate content**: Write posts/threads for selected moments
-7. **Write output**: Create `x_posts.json`
+7. **Fetch media**: Capture screenshots, extract video clips, fetch logos
+8. **Write output**: Create `x_posts_output/` with text files, media, and README
 
 ---
 
@@ -314,17 +331,24 @@ Moments detected: 15
 
 After scoring and deduplication:
   - High priority: 3
-  - Medium priority: 4
-  - Low priority: 3
-  - Skipped: 5 (2 off-topic, 2 duplicate, 1 incomplete)
+  - Medium priority: 1
+  - Skipped: 11 (off-topic, duplicate, incomplete)
 
-Extracting top moments...
+Generating posts and fetching media...
 
-Generated:
-  - 3 single posts (2 high, 1 medium priority)
-  - 1 thread (high priority, 5 tweets)
+Fetching media:
+  ✓ Screenshot: year-in-code.com.png
+  ✓ Screenshot: openrouter.ai.png
+  ✓ Logo: xiaomi_com.png
+  ✓ Video clip: 01_github_wrapped_clip.mp4 (15s)
+  ✓ Video clip: 02_open_router_clip.mp4 (35s)
+  ✓ Video clip: 03_playwright_mcp_clip.mp4 (25s)
 
-Output saved to x_posts.json
+Output saved to x_posts_output/:
+  - 4 text files (copy-paste ready)
+  - 3 video clips
+  - 3 images (screenshots + logos)
+  - README.md with summary
 ```
 
 ---
@@ -342,23 +366,33 @@ Output saved to x_posts.json
 This skill works alongside:
 
 - **clipper**: Uses same `parsed.json` input format
-- **media-fetcher**: Can fetch media assets based on media requests in output
+- **media-fetcher**: Scripts are called automatically to fetch screenshots and logos
 
 **Typical workflow:**
 ```
 1. User runs transcription → out.json
-2. Run clipper → video clips in clips/
-3. Run x-post-extractor → x_posts.json with media requests
-4. Run media-fetcher → media assets for posts
-5. User publishes posts with media
+2. Run x-post-extractor → x_posts_output/ with:
+   - Copy-paste ready text files
+   - Video clips extracted from stream
+   - Screenshots captured automatically
+   - Logos fetched for mentioned companies
+3. User copies text, attaches media, posts to Twitter
 ```
+
+**What gets fetched automatically:**
+- Screenshots of product/tool websites mentioned
+- Video clips from stream at relevant timestamps
+- Company logos for brands discussed
 
 ---
 
 ## Requirements
 
-- **Python 3.8+** for parse script (uses clipper's script)
+- **Python 3.8+** for parse script and media-fetcher scripts
+- **ffmpeg** for extracting video clips (`brew install ffmpeg`)
+- **Playwright** for screenshots (`pip install playwright && playwright install chromium`)
 - Stream transcription in JSON format with timestamps
+- Stream video file (`.mp4`, `.webm`, `.mkv`) for clip extraction
 
 ---
 
