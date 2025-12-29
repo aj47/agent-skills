@@ -166,20 +166,115 @@ def detect_tools(entries: list[TranscriptEntry]) -> list[tuple[str, int]]:
     return tool_counts.most_common(10)
 
 
+def generate_chapter_title(entries: list[TranscriptEntry], center_idx: int) -> str:
+    """Generate a meaningful chapter title from context around a timestamp."""
+    # Get context window (5 entries before and after)
+    start_idx = max(0, center_idx - 5)
+    end_idx = min(len(entries), center_idx + 6)
+    context_entries = entries[start_idx:end_idx]
+    context_text = ' '.join(e.text.lower() for e in context_entries)
+
+    # Detect tools mentioned in context
+    tools_found = []
+    for tool in TOOLS_WITH_LINKS.keys():
+        if tool in context_text:
+            tools_found.append(tool.title())
+
+    # Topic keywords to add specificity
+    topic_patterns = [
+        (r'(\d+)\s*seconds?', lambda m: f"{m.group(1)} second"),
+        (r'browser|web\s*page|screenshot', 'browser automation'),
+        (r'speed|fast|slow|time|seconds', 'speed'),
+        (r'benchmark', 'benchmark'),
+        (r'wordle', 'Wordle challenge'),
+        (r'mcp|model context|server', 'MCP'),
+        (r'\$\d+', 'pricing'),
+        (r'api|endpoint', 'API'),
+        (r'local|offline', 'local setup'),
+        (r'agent|autonomous', 'agent'),
+    ]
+
+    detected_topic = None
+    for pattern, topic in topic_patterns:
+        match = re.search(pattern, context_text)
+        if match:
+            if callable(topic):
+                detected_topic = topic(match)
+            else:
+                detected_topic = topic
+            break
+
+    # Action patterns to detect what's happening
+    action_patterns = [
+        (r'setting up|configuring|installing|install', 'Setting up'),
+        (r'testing|trying out|let\'s try|let\'s test|running', 'Testing'),
+        (r'comparing|versus| vs |compared to', 'Comparing'),
+        (r'benchmark|speed test|how fast', 'Benchmark'),
+        (r'new record|fastest|best time|record', 'New record:'),
+        (r'demo|showing|let me show|watch this', 'Demo:'),
+        (r'result|worked|success|done|finished', 'Results:'),
+        (r'problem|issue|error|bug|fix|doesn\'t work', 'Troubleshooting'),
+        (r'explain|how it works|what is|why does', 'Explaining'),
+        (r'discover|found|check this out|look at this', 'Discovery:'),
+        (r'\$\d+|price|cost|plan|subscription', 'Pricing'),
+        (r'question|q&a|chat asks|someone asked', 'Q&A:'),
+    ]
+
+    detected_action = None
+    for pattern, action_name in action_patterns:
+        if re.search(pattern, context_text):
+            detected_action = action_name
+            break
+
+    # Build the title with more specificity
+    if tools_found and detected_action:
+        primary_tool = tools_found[0]
+        if detected_topic and detected_topic not in ['speed', 'benchmark']:
+            # "New record: Claude 43 second Wordle"
+            return f"{detected_action} {primary_tool} {detected_topic}"
+        else:
+            # "Testing Claude Code"
+            return f"{detected_action} {primary_tool}"
+    elif tools_found and detected_topic:
+        # "Claude Code speed test"
+        primary_tool = tools_found[0]
+        return f"{primary_tool} {detected_topic}"
+    elif tools_found:
+        # More specific than just "discussion"
+        primary_tool = tools_found[0]
+        # Try to find what aspect we're discussing
+        if 'how' in context_text or 'why' in context_text:
+            return f"How {primary_tool} works"
+        elif 'setup' in context_text or 'config' in context_text:
+            return f"{primary_tool} configuration"
+        elif 'feature' in context_text or 'new' in context_text:
+            return f"{primary_tool} features"
+        else:
+            return f"Using {primary_tool}"
+    elif detected_action and detected_topic:
+        return f"{detected_action} {detected_topic}"
+    elif detected_action:
+        return detected_action
+    else:
+        # No good title could be generated - return None to skip this moment
+        return None
+
+
 def find_key_moments(entries: list[TranscriptEntry]) -> list[KeyMoment]:
     """Find key moments for timestamps section."""
     moments = []
 
-    # High-energy markers
+    # High-energy markers (reactions that indicate something interesting)
     energy_markers = [
         'wow', 'whoa', 'incredible', 'amazing', 'insane', 'crazy',
         'new record', 'that worked', 'perfect', 'boom', 'sick'
     ]
 
-    # Topic markers
+    # Topic markers (indicate a new section or topic)
     topic_markers = [
         'let me show', 'testing', 'trying', 'setting up', 'configuring',
-        'the answer', 'result', 'benchmark', 'comparing'
+        'the answer', 'result', 'benchmark', 'comparing', 'now we',
+        'next up', 'moving on', 'let\'s try', 'let\'s see', 'alright so'
     ]
 
     # Scan for moments
@@ -200,19 +295,23 @@ def find_key_moments(entries: list[TranscriptEntry]) -> list[KeyMoment]:
                 score += 2
                 reasons.append(marker)
 
-        # Check for tool mentions
+        # Check for tool mentions (strong signal for chapter)
         for tool in TOOLS_WITH_LINKS.keys():
             if tool in text_lower:
-                score += 1
+                score += 2
 
         if score >= 3:
+            # Generate a meaningful chapter title from context
+            title = generate_chapter_title(entries, i)
+
+            # Skip moments that don't produce good titles
+            if title is None:
+                continue
+
             # Get context for description
             context_start = max(0, i - 1)
             context_end = min(len(entries), i + 2)
             context = ' '.join(e.text for e in entries[context_start:context_end])
-
-            # Create moment title - use full text, clean it up
-            title = entry.text.replace('\n', ' ').strip()
 
             # Ensure timestamp is in HH:MM:SS format
             ts = entry.timestamp
