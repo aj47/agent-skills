@@ -38,7 +38,6 @@ TOOLS_WITH_LINKS = {
     'playwright': 'https://playwright.dev',
     'playwright mcp': 'https://github.com/microsoft/playwright-mcp',
     'playwriter': 'https://github.com/remorses/playwriter',
-    'playrider': 'https://github.com/remorses/playwriter',
     'n8n': 'https://n8n.io',
     'langchain': 'https://langchain.com',
     'llamaindex': 'https://llamaindex.ai',
