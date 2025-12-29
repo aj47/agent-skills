@@ -1,11 +1,11 @@
 ---
 name: stream-transcript-processor
-description: Process Twitch/YouTube stream transcripts to identify clip-worthy moments, generate short-form script notes, draft X posts, and extract content insights. Use when given a stream transcript, VOD URL, or when asked to find clips/highlights from a techfren stream.
+description: Process Twitch/YouTube stream transcripts to identify clip-worthy moments, generate short-form script notes, draft X posts, YouTube metadata, and extract content insights. Use when given a stream transcript, VOD URL, or when asked to find clips/highlights from a techfren stream.
 ---
 
 # Stream Transcript Processor
 
-Process @techfren stream transcripts into actionable content assets: clips, script notes, X posts, and analytics.
+Process @techfren stream transcripts into actionable content assets: clips, script notes, X posts, YouTube metadata, and analytics.
 
 **This skill orchestrates existing skills and adds new capabilities:**
 - Uses **clipper** for clip extraction
@@ -13,6 +13,7 @@ Process @techfren stream transcripts into actionable content assets: clips, scri
 - Uses **media-fetcher** for screenshots and media
 - **NEW**: Fetch transcripts from URLs (auto-captions)
 - **NEW**: Generate script notes for short-form recording
+- **NEW**: YouTube metadata (title, description with timestamps, SEO tags)
 - **NEW**: Content analytics and insights
 
 ---
@@ -25,6 +26,7 @@ Activate when user:
 - Asks to "find clips" or "find highlights" from a stream
 - Wants "script notes" for short-form content
 - Asks for X post drafts from stream content
+- Needs YouTube title, description, or tags
 - Requests stream analytics or insights
 
 ---
@@ -33,10 +35,11 @@ Activate when user:
 
 | User Request | Action |
 |--------------|--------|
-| "Process this stream [URL]" | Full pipeline: fetch → analyze → clips → posts |
+| "Process this stream [URL]" | Full pipeline: fetch → analyze → clips → posts → YouTube metadata |
 | "Find clips from [transcript]" | Delegate to clipper skill |
 | "Generate script notes for [timestamp]" | Create recording notes |
 | "Draft X posts from [stream]" | Delegate to x-post-extractor or use draft script |
+| "Generate YouTube description" | Create title, description with timestamps, tags |
 | "Analyze this stream" | Content analytics report |
 
 ---
@@ -149,6 +152,67 @@ python .claude/skills/stream-transcript-processor/scripts/draft_x_posts.py \
 ```
 
 Styles: `discovery`, `result`, `comparison`, `tutorial`
+
+---
+
+### YouTube Metadata Generation
+
+Generate SEO-optimized YouTube title, description with timestamps, and tags:
+
+```bash
+python .claude/skills/stream-transcript-processor/scripts/generate_youtube_metadata.py \
+    <transcript_file> [--title "Custom Title"] [--output youtube_metadata.md]
+```
+
+**Output includes:**
+- Engaging title with hook patterns
+- Description with auto-generated timestamps
+- Tool links for all mentioned products
+- Social links section
+- SEO-optimized tags (up to 30)
+
+**Example output:**
+```markdown
+## Title
+```
+Claude Haiku Benchmark: New Record! | Live Testing
+```
+
+## Description
+```
+🎯 Claude Haiku Benchmark: New Record! | Live Testing
+
+In this stream, I test and demo various AI tools and share my findings live.
+Watch to see real-time benchmarks, comparisons, and honest reactions.
+
+⏱️ TIMESTAMPS
+0:00 - Intro
+6:12 - Setting up Playwright MCP
+11:05 - Claude Code $200 plan discussion
+47:35 - Testing Playrider MCP
+1:01:31 - Playrider speed results
+1:04:29 - Haiku 43 second record!
+
+🔗 TOOLS MENTIONED
+• Claude: https://claude.ai
+• Playwright: https://playwright.dev
+• Augment: https://augmentcode.com
+
+📱 CONNECT
+• Twitter/X: https://x.com/techfren
+• GitHub: https://github.com/aj47
+• Website: https://techfren.net
+
+#AI #Coding #Programming #Claude #Benchmark #TechStream
+```
+
+## Tags
+```
+claude, haiku, benchmark, ai coding, playwright mcp, live coding, ai tools, programming, developer tools, automation
+```
+```
+
+See [youtube-description-template.md](templates/youtube-description-template.md) for full template and SEO guidelines.
 
 ---
 
@@ -311,6 +375,7 @@ When running full pipeline:
 ├── transcript.json         # Structured transcript
 ├── parsed.json             # Clipper-compatible format
 ├── segments.json           # Identified clips
+├── youtube_metadata.md     # Title, description, tags
 ├── clips/                  # Extracted video clips
 │   ├── 001_Tool_Demo.mp4
 │   ├── 002_Discovery.mp4
@@ -407,6 +472,8 @@ Claude:
 
 - [voice-patterns.md](references/voice-patterns.md) - Detection patterns for scoring
 - [clip-criteria.md](references/clip-criteria.md) - What makes a good clip
+- [script-notes-template.md](templates/script-notes-template.md) - Script notes format
+- [youtube-description-template.md](templates/youtube-description-template.md) - YouTube SEO template
 - [clipper/SKILL.md](../clipper/SKILL.md) - Full clip extraction workflow
 - [x-post-extractor/SKILL.md](../x-post-extractor/SKILL.md) - X post extraction workflow
 - [x-post-extractor/VOICE.md](../x-post-extractor/VOICE.md) - Writing voice guidelines
