@@ -108,13 +108,11 @@ def timestamp_to_seconds(ts: str) -> float:
 
 
 def seconds_to_timestamp(seconds: float) -> str:
-    """Convert seconds to HH:MM:SS or MM:SS format."""
+    """Convert seconds to HH:MM:SS format (always with hours)."""
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
-    if h > 0:
-        return f"{h}:{m:02d}:{s:02d}"
-    return f"{m}:{s:02d}"
+    return f"{h:02d}:{m:02d}:{s:02d}"
 
 
 def load_transcript(path: str) -> list[TranscriptEntry]:
@@ -213,13 +211,20 @@ def find_key_moments(entries: list[TranscriptEntry]) -> list[KeyMoment]:
             context_end = min(len(entries), i + 2)
             context = ' '.join(e.text for e in entries[context_start:context_end])
 
-            # Create moment title
-            title = entry.text[:60].strip()
-            if len(entry.text) > 60:
-                title = title.rsplit(' ', 1)[0] + '...'
+            # Create moment title - use full text, clean it up
+            title = entry.text.replace('\n', ' ').strip()
+
+            # Ensure timestamp is in HH:MM:SS format
+            ts = entry.timestamp
+            if ts.count(':') == 1:
+                ts = '00:' + ts
+            # Pad hours if needed
+            parts = ts.split(':')
+            if len(parts[0]) == 1:
+                ts = '0' + ts
 
             moments.append(KeyMoment(
-                timestamp=entry.timestamp,
+                timestamp=ts,
                 seconds=entry.seconds,
                 title=title,
                 description=context[:150],
@@ -332,13 +337,17 @@ Watch to see real-time benchmarks, comparisons, and honest reactions.
     # Timestamps
     if moments:
         timestamps_section = "⏱️ TIMESTAMPS\n"
-        timestamps_section += f"0:00 - Intro\n"
+        timestamps_section += f"00:00:00 Intro\n"
         for moment in moments:
-            # Clean up the title
+            # Clean up the title - remove newlines, keep full text
             clean_title = moment.title.replace('\n', ' ').strip()
-            if len(clean_title) > 50:
-                clean_title = clean_title[:50] + '...'
-            timestamps_section += f"{moment.timestamp} - {clean_title}\n"
+            # Ensure timestamp is in HH:MM:SS format
+            ts = moment.timestamp
+            if ts.count(':') == 1:
+                ts = '00:' + ts
+            if len(ts.split(':')[0]) == 1:
+                ts = '0' + ts
+            timestamps_section += f"{ts} {clean_title}\n"
         sections.append(timestamps_section)
 
     # Tools & Links
@@ -427,9 +436,8 @@ def format_output(metadata: YouTubeMetadata) -> str:
 
 ## Timestamps (for description)
 ```
-⏱️ TIMESTAMPS
-0:00 - Intro
-{chr(10).join(f'{ts} - {title}' for ts, title in metadata.timestamps)}
+00:00:00 Intro
+{chr(10).join(f'{ts if ts.count(":") == 2 else "00:" + ts} {title}' for ts, title in metadata.timestamps)}
 ```
 
 ---
