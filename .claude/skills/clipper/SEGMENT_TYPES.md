@@ -2,7 +2,150 @@
 
 This document provides detailed guidance on identifying different types of clip-worthy video segments.
 
-## Categories
+## Story Arc Types (NEW - Highest Priority)
+
+Story arcs are complete narratives that include all required beats. These produce the most valuable clips.
+
+### ARGUMENT Arc
+
+Complete claim-proof-resolution sequences.
+
+**Structure:** CLAIM → EVIDENCE → RESOLUTION
+
+**Characteristics:**
+- Thesis or hot take that needs proof
+- Live demonstration or example as evidence
+- Conclusive moment confirming/denying the claim
+
+**Example:**
+- CLAIM: "Skills can replace MCPs for most use cases"
+- EVIDENCE: [5-10 minute demo building a skill]
+- RESOLUTION: "See? Same functionality, no MCP needed"
+
+**Ideal Length:** 60-300 seconds (can be longer for complex demos)
+
+**Key Indicators:**
+- Opinion/thesis statements followed by "let me prove it"
+- Demo or example execution
+- Victory/conclusion reactions
+
+**Score Boost:** +15 for complete arc with demo evidence
+
+---
+
+### TUTORIAL Arc
+
+Complete how-to sequences with goal, process, and result.
+
+**Structure:** GOAL → STEPS → RESULT
+
+**Characteristics:**
+- Clear statement of what will be built/achieved
+- Step-by-step demonstration
+- Working result shown
+
+**Example:**
+- GOAL: "Let's set up Playwright MCP from scratch"
+- STEPS: "First install... then configure... finally..."
+- RESULT: "And there we go, it's working!"
+
+**Ideal Length:** 90-300 seconds
+
+**Key Indicators:**
+- "Let me show you how to..."
+- Sequential actions with "first", "then", "next"
+- Success confirmation at the end
+
+**Score Boost:** +15 for complete tutorial with working result
+
+---
+
+### DISCOVERY Arc
+
+Finding and evaluating something new.
+
+**Structure:** FIND → EXPLORE → VERDICT
+
+**Characteristics:**
+- Introduction of new tool/technique/idea
+- Testing and experimentation
+- Clear judgment or recommendation
+
+**Example:**
+- FIND: "Check out this new tool I found"
+- EXPLORE: "Let me try it out..."
+- VERDICT: "This might actually replace my current setup"
+
+**Ideal Length:** 45-180 seconds
+
+**Key Indicators:**
+- "Just found...", "Check this out..."
+- Testing behavior, curiosity
+- Assessment language ("impressed", "not worth it")
+
+**Score Boost:** +10 for complete discovery with verdict
+
+---
+
+### COMPARISON Arc
+
+A vs B evaluations with clear conclusion.
+
+**Structure:** CONTENDERS → CRITERIA → TEST → WINNER
+
+**Characteristics:**
+- Two or more options introduced
+- Clear criteria for comparison
+- Actual test/demonstration
+- Definitive recommendation
+
+**Example:**
+- CONTENDERS: "Sonnet vs GPT-4o"
+- CRITERIA: "Testing on this refactor task"
+- TEST: [Running both, showing results]
+- WINNER: "Sonnet handles edge cases better"
+
+**Ideal Length:** 60-300 seconds
+
+**Key Indicators:**
+- "vs", "compared to", "versus"
+- Side-by-side demonstration
+- Clear winner statement
+
+**Score Boost:** +12 for complete comparison with verdict
+
+---
+
+### PROBLEM-SOLUTION Arc
+
+Debugging and troubleshooting narratives.
+
+**Structure:** PROBLEM → INSIGHT → FIX → CONFIRMATION
+
+**Characteristics:**
+- Statement of bug/issue/blocker
+- Aha moment of realization
+- Applied fix
+- Working state confirmed
+
+**Example:**
+- PROBLEM: "Why is this timing out?"
+- INSIGHT: "Wait, the timeout is too low"
+- FIX: "Let me bump it to 30 seconds"
+- CONFIRMATION: "Yes! It's working now"
+
+**Ideal Length:** 45-180 seconds
+
+**Key Indicators:**
+- Error language, frustration
+- "Wait...", "Oh!", realization moments
+- Fix application followed by relief
+
+**Score Boost:** +10 for complete problem-solution
+
+---
+
+## Individual Moment Categories
 
 ### 1. Reaction Clips
 
@@ -299,3 +442,72 @@ Different platforms favor different characteristics:
 - Professional tips and advice
 - Teaching moments and insights
 - Industry-specific content
+
+---
+
+## Relationship: Individual Moments → Story Arcs
+
+Individual moment categories often map to narrative beats:
+
+| Individual Category | Common Beat Role |
+|--------------------|------------------|
+| **reaction** | RESOLUTION, CONFIRMATION, VERDICT |
+| **tip** | EVIDENCE (in ARGUMENT), STEPS (in TUTORIAL) |
+| **teaching** | STEPS, EVIDENCE, EXPLORE |
+| **question** | Can trigger DISCOVERY arc |
+| **humor** | Often standalone, rarely part of arc |
+| **story** | Often maps to PROBLEM-SOLUTION arc |
+| **opinion** | CLAIM, VERDICT, WINNER |
+
+### Priority Order
+
+When scoring and extracting clips, prioritize in this order:
+
+1. **Complete Story Arcs** (highest value)
+   - All required beats present
+   - Narrative is self-contained
+   - Score boost: +10 to +15
+
+2. **Partial Story Arcs** (with gaps flagged)
+   - 2+ beats present but missing key elements
+   - Flag gaps for user review
+   - Score: standard + partial boost
+
+3. **High-Confidence Individual Moments** (0.85+)
+   - Strong standalone value
+   - May be orphan beats
+   - Extract with orphan warning if applicable
+
+4. **Medium-Confidence Individual Moments** (0.70-0.84)
+   - Decent value, context-dependent
+   - Consider for compilations
+
+5. **Low-Confidence Moments** (0.60-0.69)
+   - Include only if no better options
+   - Often better as part of compilation
+
+### Demo-First Scoring Adjustments
+
+Apply these adjustments to base confidence:
+
+| Content Type | Adjustment |
+|--------------|------------|
+| Complete demo with result | +0.15 |
+| Demo in progress (no result yet) | +0.08 |
+| Verbal claim with no demo | +0.00 |
+| Orphan claim (no proof found) | -0.10 |
+| Result without showing process | +0.05 |
+
+### Orphan Detection
+
+Flag segments as "orphan" when:
+
+- **Orphan CLAIM**: Opinion/thesis with no EVIDENCE within 5 minutes
+- **Orphan RESOLUTION**: Victory reaction with no preceding EVIDENCE
+- **Orphan RESULT**: "It works!" with no GOAL or STEPS shown
+- **Orphan VERDICT**: Assessment with no EXPLORE/TEST shown
+
+Orphans should be:
+1. Flagged in output with `is_orphan: true`
+2. Still extracted (may have standalone value)
+3. Reviewed for potential missed beats

@@ -1,11 +1,14 @@
 ---
 name: clipper
-description: Analyze video transcriptions to identify interesting segments for clipping. Finds highlights, key moments, and reactions with precise timestamps. Use when working with video transcriptions to extract clip-worthy moments.
+description: Analyze video transcriptions to identify interesting segments for clipping. Finds highlights, key moments, and reactions with precise timestamps. Use when working with video transcriptions to extract clip-worthy moments. (project)
 ---
 
 # Video Clipper Skill
 
 Analyzes video transcription files to identify the most interesting and clip-worthy segments with precise timestamps.
+
+**Key Feature: Narrative Completeness**
+This skill uses a two-pass system to ensure clips tell complete stories, not just isolated moments. See [NARRATIVE_TEMPLATES.md](NARRATIVE_TEMPLATES.md) for story arc templates.
 
 ## Quick Start
 
@@ -18,9 +21,11 @@ User: "Find interesting clips from my video"
 You will automatically:
 1. Detect the transcription file (usually `out.json` or `*.json`)
 2. Check if `parsed.json` exists, if not, run the parse script
-3. Analyze `parsed.json` and create `segments.json`
-4. Detect video file and run extraction script
-5. Run cleanup script to remove fillers and silences
+3. **Pass 1**: Analyze `parsed.json` for clip-worthy moments → `segments.json`
+4. **Pass 2**: Validate narrative completeness, detect gaps → `validation_report.json`
+5. Merge approved suggestions into final segments
+6. Detect video file and run extraction script
+7. Run cleanup script to remove fillers and silences
 
 ## Execution Checklist
 
@@ -35,18 +40,29 @@ When user asks to find clips, follow this exact sequence:
 - [ ] If `parsed.json` doesn't exist, run: `python .claude/skills/clipper/scripts/parse_transcription.py <transcription> > parsed.json`
 - [ ] Verify `parsed.json` was created successfully
 
-**C. Analyze**
+**C. Pass 1: Signal Detection**
 - [ ] Read `parsed.json` in windows (100-200 sentences at a time)
-- [ ] Identify clip-worthy segments using the 7 categories below
-- [ ] Write results to `segments.json`
+- [ ] Identify clip-worthy segments using the 7 categories + narrative beats
+- [ ] Apply **Demo-First Scoring** (demos +15, verbal claims +4)
+- [ ] Write initial results to `segments.json`
 - [ ] Report summary to user (number of clips found, categories, etc.)
 
-**D. Extract (automatic)**
+**D. Pass 2: Narrative Validation (NEW)**
+- [ ] Extract narrative structures from full transcript (see [NARRATIVE_TEMPLATES.md](NARRATIVE_TEMPLATES.md))
+- [ ] Map detected clips to story arcs (ARGUMENT, TUTORIAL, DISCOVERY, etc.)
+- [ ] Run **Claim-Proof Linking** - link claims to their evidence
+- [ ] Detect **gaps** where key narrative elements are missing
+- [ ] Generate `validation_report.json` with gaps and suggestions
+- [ ] Present gaps and suggestions to user
+- [ ] User approves/rejects suggested additions
+- [ ] Merge approved suggestions into `segments.json`
+
+**E. Extract (automatic)**
 - [ ] Detect video file (`*.mp4`, `*.mov`, `*.mkv`)
 - [ ] Run: `python .claude/skills/clipper/scripts/extract_clips.py segments.json <transcription> <video> clips/`
 - [ ] Monitor output and report results
 
-**E. Cleanup (automatic)**
+**F. Cleanup (automatic)**
 - [ ] Run: `python .claude/skills/clipper/scripts/cleanup_clips.py segments.json <transcription> <video> clips/`
 - [ ] Cleaned clips are saved to `clips/cleaned/`
 - [ ] Report cleanup stats (fillers removed, silences removed, time saved)
@@ -116,7 +132,77 @@ Create a file called `segments.json` with this structure:
         "sentences_added_after": 0,
         "reason": "Segment was self-contained from initial identification"
       },
-      "coherence_validated": true
+      "coherence_validated": true,
+      "narrative": {
+        "beat_type": "RESOLUTION",
+        "arc_id": "arc_003",
+        "arc_role": "Conclusion of discovery arc",
+        "linked_claims": [],
+        "is_orphan": false
+      }
+    },
+    {
+      "start_index": 152,
+      "end_index": 189,
+      "start_time": 375.0,
+      "end_time": 512.8,
+      "duration": 137.8,
+      "text": "Let me prove it. I'm going to build this with just a skill...",
+      "reason": "DEMO: Live demonstration proving skills can replace MCPs - core evidence for stream thesis",
+      "category": "teaching",
+      "topic": "skills_vs_mcps",
+      "subtopic": "demo_proof",
+      "keywords": ["skills", "mcp", "demo", "proof", "building"],
+      "confidence": 0.95,
+      "suggested_title": "Building a Skill to Replace MCPs - Live Demo",
+      "key_quote": "Let me prove it.",
+      "first_sentence": "Let me prove it.",
+      "last_sentence": "And there we go, it's working.",
+      "total_sentences": 38,
+      "narrative": {
+        "beat_type": "EVIDENCE",
+        "arc_id": "arc_001",
+        "arc_role": "Demo proving the thesis claim",
+        "linked_claims": ["clip_023"],
+        "is_orphan": false,
+        "demo_score_boost": 15
+      }
+    }
+  ],
+  "story_arcs": [
+    {
+      "id": "arc_001",
+      "template": "ARGUMENT",
+      "title": "Skills Can Replace MCPs - Complete Proof",
+      "completeness_score": 1.0,
+      "status": "COMPLETE",
+      "beats": [
+        {
+          "type": "CLAIM",
+          "clip_index": 23,
+          "start_time": 342.5,
+          "end_time": 358.2,
+          "confidence": 0.95
+        },
+        {
+          "type": "EVIDENCE",
+          "clip_index": 45,
+          "start_time": 375.0,
+          "end_time": 512.8,
+          "confidence": 0.92
+        },
+        {
+          "type": "RESOLUTION",
+          "clip_index": 67,
+          "start_time": 525.0,
+          "end_time": 538.5,
+          "confidence": 0.94
+        }
+      ],
+      "total_duration": 196.0,
+      "required_beats_found": 3,
+      "required_beats_total": 3,
+      "optional_beats_found": ["STAKES"]
     }
   ],
   "compilations": [
@@ -132,6 +218,14 @@ Create a file called `segments.json` with this structure:
       "created_automatically": true
     }
   ],
+  "orphan_beats": [
+    {
+      "type": "CLAIM",
+      "clip_index": 78,
+      "text": "I think Cursor is overrated...",
+      "note": "Found CLAIM but no EVIDENCE or RESOLUTION detected within 5 minutes"
+    }
+  ],
   "metadata": {
     "total_sentences_analyzed": 4400,
     "total_duration": 24165.0,
@@ -139,7 +233,12 @@ Create a file called `segments.json` with this structure:
     "max_clip_length": 180,
     "confidence_threshold": 0.6,
     "individual_clips": 148,
-    "compilations_created": 12
+    "compilations_created": 12,
+    "story_arcs_detected": 8,
+    "story_arcs_complete": 6,
+    "orphan_beats": 3,
+    "demo_clips_detected": 12,
+    "narrative_validation_run": true
   }
 }
 ```
@@ -429,17 +528,179 @@ Output saved to segments.json
 Extracting clips...
 ```
 
+### Step 2.5: Narrative Validation (Pass 2)
+
+After initial segment detection, run narrative validation to ensure complete story arcs.
+
+#### What This Step Does
+
+1. **Extracts narrative structures** from the full transcript
+2. **Maps detected clips** to story arc templates (ARGUMENT, TUTORIAL, DISCOVERY, etc.)
+3. **Identifies gaps** where key narrative elements are missing
+4. **Suggests additional clips** to complete stories
+
+#### Narrative Arc Detection
+
+Scan the transcript for story arc patterns:
+
+**ARGUMENT arcs** (Claim → Evidence → Resolution):
+- Look for CLAIM patterns in opinion segments
+- Search for EVIDENCE (demos, proofs) within 5 minutes of claims
+- Find RESOLUTION patterns that conclude arguments
+
+**TUTORIAL arcs** (Goal → Steps → Result):
+- Detect GOAL statements ("Let's build...", "I want to show you...")
+- Identify STEPS with sequential actions
+- Find RESULT patterns ("Done!", "It works!")
+
+**DISCOVERY arcs** (Find → Explore → Verdict):
+- Look for FIND patterns ("Check this out...", "Just found...")
+- Detect EXPLORE behavior (testing, experimenting)
+- Find VERDICT assessments
+
+**PROBLEM-SOLUTION arcs** (Problem → Insight → Fix → Confirmation):
+- Detect PROBLEM statements (errors, frustration)
+- Find INSIGHT moments ("Wait...", "The issue is...")
+- Identify FIX actions and CONFIRMATION
+
+See [BEAT_PATTERNS.md](BEAT_PATTERNS.md) for detailed detection patterns.
+
+#### Demo-First Scoring
+
+Apply these scoring boosts during analysis:
+
+| Content Type | Score Boost |
+|--------------|-------------|
+| Complete demo (with execution/results) | +15 |
+| Result/success moment | +8 |
+| Discovery/insight moment | +6 |
+| Verbal claim without demo | +4 |
+| Context/setup | +2 |
+
+This ensures demos are prioritized over verbal claims.
+
+#### Claim-Proof Linking
+
+For each detected claim:
+1. Search forward (up to 5 minutes) for supporting evidence
+2. If evidence found, link the claim to its proof
+3. If no evidence found, flag as **orphan claim**
+4. Similarly, flag evidence without preceding claims
+
+#### Gap Detection
+
+A gap exists when:
+1. **Claim found, evidence missing, resolution found** - the proof is missing!
+2. **Goal found, steps missing, result found** - the tutorial is incomplete
+3. **Referenced content not clipped** - "as I showed" but that content wasn't captured
+
+Gap priority scoring:
+- **HIGH**: Core content missing (stream title topic, main thesis proof)
+- **MEDIUM**: Supporting content missing
+- **LOW**: Optional/tangential content
+
+#### Validation Output
+
+Generate `validation_report.json`:
+
+```json
+{
+  "validation_summary": {
+    "total_clips_pass1": 45,
+    "narrative_arcs_detected": 8,
+    "arcs_complete": 3,
+    "arcs_with_gaps": 5,
+    "gaps_detected": 12,
+    "high_priority_gaps": 3
+  },
+  "narrative_arcs": [
+    {
+      "id": "arc_001",
+      "type": "ARGUMENT",
+      "title": "Skills Can Replace MCPs",
+      "completeness_score": 0.33,
+      "status": "INCOMPLETE",
+      "beats": {
+        "CLAIM": {"found": true, "clip_id": "clip_023"},
+        "EVIDENCE": {"found": false, "expected_range": [1400, 2100]},
+        "RESOLUTION": {"found": true, "clip_id": "clip_045"}
+      },
+      "gaps": ["evidence_missing"]
+    }
+  ],
+  "gaps": [
+    {
+      "id": "gap_001",
+      "priority": "HIGH",
+      "type": "missing_evidence",
+      "arc_id": "arc_001",
+      "timestamp_range": [1400.0, 2100.0],
+      "description": "Demo proving skills can replace MCPs",
+      "why_important": "Stream titled 'Skills vs MCPs' - the demo IS the content",
+      "suggested_clip": {
+        "start_time": 1400.0,
+        "end_time": 2100.0,
+        "suggested_title": "Building a Skill to Replace MCPs - Live Demo"
+      }
+    }
+  ],
+  "orphan_claims": [
+    {
+      "clip_id": "clip_078",
+      "claim_text": "I think Cursor is overrated",
+      "note": "CLAIM found but no EVIDENCE detected within 5 minutes"
+    }
+  ]
+}
+```
+
+#### Presenting Gaps to User
+
+After validation, present gaps like this:
+
+```
+⚠️  NARRATIVE GAPS DETECTED
+
+The following important content was NOT captured as clips:
+
+1. [HIGH] "Skills vs MCPs Demo" (23:20 - 35:00)
+   Your thesis claim and conclusion were clipped, but the DEMO proving
+   the thesis was missed. This 12-minute segment shows the actual
+   skill being built.
+
+   → Suggest: Add as clip "Building a Skill to Replace MCPs - Live Demo"
+
+2. [MEDIUM] "Authentication Setup" (45:00 - 48:30)
+   Clip #12 shows the result ("It works!") but the setup showing
+   HOW it was configured is missing.
+
+   → Suggest: Add as clip "OAuth Configuration Walkthrough"
+
+Accept suggestions? [Y/n/select]
+```
+
+#### Merging Approved Suggestions
+
+When user approves suggestions:
+1. Add suggested clips to `segments.json`
+2. Mark narrative arcs as complete
+3. Update compilations if needed
+4. Proceed to extraction
+
 ### Step 3: Review Identified Segments
 
 After analysis, review `segments.json`:
-- **Individual clips**: All identified segments sorted by confidence (highest first)
+- **Story arcs**: Complete narrative arcs (highest priority)
+- **Individual clips**: All identified segments sorted by confidence
 - **Topic metadata**: Each clip includes topic, subtopic, and keywords
 - **Compilations**: Automatically created for topics with 2+ segments
+- **Narrative metadata**: Beat type, arc membership, orphan status
 - Each segment includes:
   - Precise timestamps for video extraction
   - Category and reason explaining why it's interesting
   - Hierarchical topic information
   - Suggested title for the clip
+  - Beat type (if part of a narrative arc)
 
 ### Step 4: Extract Video Clips (Automatic)
 
