@@ -7,42 +7,33 @@ This skill enables scraping X/Twitter content using agent-browser CLI connected 
 
 ## Prerequisites
 - agent-browser must be installed globally (`npm install -g agent-browser`)
-- Chrome must be running with remote debugging on port 9222 using a non-default user-data-dir that contains your X cookies
+- Chrome must be running with remote debugging on port 9222 using the permanent debug profile at `~/chrome-debug-profile`
 
-## Chrome Setup (IMPORTANT)
+## Chrome Setup (One-Time)
 
-Chrome refuses to enable remote debugging on the Default profile directly. You must copy the Default profile cookies to a temp dir and launch from there:
+A permanent dedicated debug profile lives at `~/chrome-debug-profile`. Log into X once in that profile and it persists forever.
 
+### Launch Chrome debug session
 ```bash
-# Step 1: Kill any existing debug Chrome
-pkill -f "Google Chrome.*remote-debugging-port=9222" 2>/dev/null; sleep 1
+chrome-debug
+# (alias defined in ~/.zshrc)
+```
 
-# Step 2: Copy Default profile cookies to temp dir
-mkdir -p /tmp/chrome-debug-profile/Default
-cp ~/Library/Application\ Support/Google/Chrome/Default/Cookies /tmp/chrome-debug-profile/Default/ 2>/dev/null || true
-cp ~/Library/Application\ Support/Google/Chrome/Default/Network/Cookies /tmp/chrome-debug-profile/Default/ 2>/dev/null || true
-cp ~/Library/Application\ Support/Google/Chrome/Default/Login\ Data /tmp/chrome-debug-profile/Default/ 2>/dev/null || true
-cp ~/Library/Application\ Support/Google/Chrome/Default/Preferences /tmp/chrome-debug-profile/Default/ 2>/dev/null || true
-
-# Step 3: Launch Chrome with debug port using the temp profile
+Or manually:
+```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/chrome-debug-profile \
+  --user-data-dir="$HOME/chrome-debug-profile" \
   --no-first-run \
   --no-default-browser-check \
   &>/tmp/chrome-debug.log &
-
-sleep 8
-
-# Step 4: Verify
-curl -s --max-time 5 http://localhost:9222/json/version && echo "OK"
+sleep 6
+curl -s http://localhost:9222/json/version && echo "OK"
 ```
 
-**Why this works:** Chrome's Default profile is locked from remote debugging as a security measure. Copying cookies to a fresh user-data-dir bypasses this while keeping your login session intact.
+**Why not `--profile-directory=Default`?** Chrome explicitly blocks remote debugging on the Default profile with: "DevTools remote debugging requires a non-default data directory." The permanent `~/chrome-debug-profile` dir bypasses this while keeping your login session intact across restarts.
 
-**Why NOT `--profile-directory=Default`:** Chrome ignores `--remote-debugging-port` when using the real Default profile and prints: "DevTools remote debugging requires a non-default data directory."
-
-**Always use `--cdp 9222`** in all agent-browser commands — never use `--auto-connect`.
+**Always use `--cdp 9222`** in all agent-browser commands.
 
 ## Verify Login
 ```bash
@@ -54,7 +45,9 @@ EOF
 # Should show: "(1) Home / X | logged_in=true"
 ```
 
-## Workflow: Scrape Following Tab (Default)
+If not logged in, open X in the debug Chrome window and log in manually — credentials persist in `~/chrome-debug-profile`.
+
+## Workflow: Scrape Home Feed
 
 ### Step 1: Navigate
 ```bash
@@ -63,19 +56,7 @@ agent-browser --cdp 9222 wait 5000
 ```
 Do NOT use `--load networkidle` — X never reaches networkidle state.
 
-### Step 2: Snapshot to find tabs
-```bash
-agent-browser --cdp 9222 snapshot -i
-```
-
-### Step 3: Click Following tab
-From snapshot, find the "Following" tab ref and click it:
-```bash
-agent-browser --cdp 9222 click @<following-tab-ref>
-agent-browser --cdp 9222 wait 3000
-```
-
-### Step 4: Extract tweet data via JS eval
+### Step 2: Extract tweet data via JS eval
 ```bash
 agent-browser --cdp 9222 eval --stdin <<'EVALEOF'
 JSON.stringify(
@@ -96,23 +77,20 @@ JSON.stringify(
 EVALEOF
 ```
 
-### Step 5: Scroll for more content
+### Step 3: Switch tabs (For You / Following)
+```bash
+agent-browser --cdp 9222 snapshot -i
+# Find "For you" or "Following" tab ref, then:
+agent-browser --cdp 9222 click @<tab-ref>
+agent-browser --cdp 9222 wait 3000
+# Re-run eval from Step 2
+```
+
+### Step 4: Scroll for more content
 ```bash
 agent-browser --cdp 9222 scroll down 2000
 agent-browser --cdp 9222 wait 1500
-# repeat eval from Step 4
-```
-
-## Workflow: Scrape For You Tab
-
-```bash
-agent-browser --cdp 9222 open "https://x.com/home"
-agent-browser --cdp 9222 wait 5000
-agent-browser --cdp 9222 snapshot -i
-# Click "For you" tab from the snapshot refs
-agent-browser --cdp 9222 click @<foryou-tab-ref>
-agent-browser --cdp 9222 wait 3000
-# Run JS eval from Step 4 above
+# Re-run eval from Step 2
 ```
 
 ## Workflow: Scrape a Specific Profile
@@ -140,19 +118,20 @@ EVALEOF
 ## Best Practices
 
 1. **Always use `--cdp 9222`** — connects to your logged-in Chrome session
-2. **Launch Chrome with `/tmp/chrome-debug-profile`** — not `--profile-directory=Default`
-3. **Always snapshot first** — get current page state before interacting
-4. **Use `wait 5000` not `networkidle`** — X never reaches networkidle
-5. **Re-snapshot after scrolling** — DOM changes invalidate old refs
-6. **Use JS eval for content extraction** — more reliable than snapshot text parsing
+2. **Use `~/chrome-debug-profile`** — permanent, stable, no cookie copying needed
+3. **Use `chrome-debug` alias** to launch — defined in ~/.zshrc
+4. **Always snapshot first** — get current page state before interacting
+5. **Use `wait 5000` not `networkidle`** — X never reaches networkidle
+6. **Re-snapshot after scrolling** — DOM changes invalidate old refs
+7. **Use JS eval for content extraction** — more reliable than snapshot text parsing
 
 ## Common Issues
 
 | Problem | Solution |
 |---------|----------|
-| Not logged in / login page | Chrome launched with wrong profile or `/tmp/chrome-debug` (empty). Re-run Chrome Setup above. |
-| "DevTools requires non-default data directory" | Don't use `--profile-directory=Default`. Use `--user-data-dir=/tmp/chrome-debug-profile` with copied cookies. |
-| Connection refused | Chrome not running — run Chrome Setup steps |
+| Not logged in / login page | Open X manually in the debug Chrome window and log in — session persists |
+| "DevTools requires non-default data directory" | Don't use `--profile-directory=Default`. Use `--user-data-dir="$HOME/chrome-debug-profile"` |
+| Connection refused | Chrome not running — run `chrome-debug` alias |
 | `networkidle` timeout | Use `wait 5000` instead — never use `--load networkidle` on X |
 | Stale refs | Run `snapshot -i` again after any page change |
 | Empty content | Wait longer (8000ms) or scroll — React may not have rendered yet |
