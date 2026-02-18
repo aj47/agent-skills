@@ -11,7 +11,7 @@ Fast extraction and summarization of X feed content using agent-browser CDP conn
 
 ## Prerequisites
 
-Requires **chrome-debug-session** skill to be running first. Verify:
+Requires **chrome-browser** skill to be running first. Verify:
 ```bash
 curl -s --max-time 3 http://localhost:9222/json/version
 ```

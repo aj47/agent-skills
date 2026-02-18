@@ -10,7 +10,7 @@ Scrapes X/Twitter content using agent-browser CLI connected to your existing log
 
 ## Prerequisites
 
-Requires **chrome-debug-session** skill to be running first. Verify:
+Requires **chrome-browser** skill to be running first. Verify:
 ```bash
 curl -s --max-time 3 http://localhost:9222/json/version
 ```
@@ -110,7 +110,7 @@ EVALEOF
 | Problem | Solution |
 |---------|----------|
 | Not logged in | Use `--cdp 9222`, not `--auto-connect` |
-| Connection refused | Run chrome-debug-session skill first |
+| Connection refused | Run chrome-browser skill first |
 | `networkidle` timeout | Use `wait 5000` — never use `--load networkidle` on X |
 | Stale refs | Run `snapshot -i` again after any page change |
 | Empty content | Wait longer (8000ms) or scroll — React may not have rendered |
@@ -128,4 +128,4 @@ EVALEOF
 - **x-post-tweet** — Post tweets using the same CDP approach
 - **x-feed-scraper** — Scrape feed with structured output
 - **x-feed-summarizer** — Summarize feed content
-- **chrome-debug-session** — Launch Chrome with CDP debugging
+- **chrome-browser** — Launch Chrome with CDP debugging

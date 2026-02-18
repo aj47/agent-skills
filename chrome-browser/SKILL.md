@@ -1,5 +1,5 @@
 ---
-name: chrome-debug-session
+name: chrome-browser
 description: "Browser automation using agent-browser CLI connected to a logged-in Chrome session via CDP. Use when asked to browse a website, fill forms, click buttons, take screenshots, scrape data, automate browser tasks, or any web interaction. Also use when asked to 'start chrome debugging', 'connect to chrome', or 'launch chrome for browser automation'."
 ---
 

@@ -10,7 +10,7 @@ Writes tweets in AJ's voice and posts them to X via the logged-in Chrome session
 
 ## Prerequisites
 
-Requires **chrome-debug-session** skill to be running first. Verify:
+Requires **chrome-browser** skill to be running first. Verify:
 ```bash
 curl -s --max-time 3 http://localhost:9222/json/version
 ```
@@ -209,6 +209,6 @@ document.querySelector('article[data-testid="tweet"]')
 ---
 
 ## Related Skills
-- **chrome-debug-session** — Launch Chrome with CDP debugging
+- **chrome-browser** — Launch Chrome with CDP debugging
 - **x-feed-scraper** — Scrape X feed for content to tweet about
 - **x-feed-summarizer** — Summarize feed into note (source material for tweet content)
