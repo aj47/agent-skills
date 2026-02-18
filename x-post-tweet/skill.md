@@ -8,6 +8,13 @@ description: "Posts tweets to X (Twitter) in AJ's voice. Use when asked to write
 ## Overview
 Writes tweets in AJ's voice and posts them to X via the logged-in Chrome session using agent-browser CDP. Combines voice guide, content strategy, and browser automation into one workflow.
 
+## Prerequisites
+
+Requires **chrome-debug-session** skill to be running first. Verify:
+```bash
+curl -s --max-time 3 http://localhost:9222/json/version
+```
+
 ---
 
 ## AJ's Voice Guide
@@ -87,14 +94,6 @@ physical intelligence is the next frontier
 go build something
 ```
 
-## Platforms This Voice Applies To
-- X / Twitter posts
-- YouTube titles and descriptions
-- TikTok captions
-- Discord announcements
-- LinkedIn posts
-- Claude project instructions
-
 ## What To Avoid
 - "I think" / "kind of" / "maybe"
 - Starting with "So," "Hey," "Just wanted to share"
@@ -117,49 +116,22 @@ go build something
 [action: go try it / download it / go build something]
 ```
 
-Example (actual posted tweet):
-```
-just spent 10 mins reading twitter so you don't have to
-
-robots doing kung fu nunchucks in China — a year ago they couldn't wave
-
-OpenClaw skill ecosystem blowing up
-
-aitmpl.com hit 100k npm downloads
-
-physical intelligence is the next frontier
-
-go build something
-```
-
 ---
 
 ## Browser Automation Workflow
-
-### Prerequisites
-Chrome must be running with remote debugging on port 9222. Check first:
-```bash
-curl -s --max-time 3 http://localhost:9222/json/version | head -c 100
-```
-
-If not running, launch it:
-```bash
-open -a "Google Chrome" --args --remote-debugging-port=9222 --profile-directory=Default
-sleep 3
-```
 
 ### Step 1: Navigate to X home
 ```bash
 agent-browser --cdp 9222 open https://x.com/home
 agent-browser --cdp 9222 wait 4000
 ```
-**IMPORTANT: Do NOT use `--auto-connect` for X** — always use `--cdp 9222` to connect to the logged-in Chrome session. `--auto-connect` may open a new unauthenticated browser instance.
+**IMPORTANT: Do NOT use `--auto-connect` for X** — always use `--cdp 9222` to connect to the logged-in Chrome session.
 
 ### Step 2: Snapshot to find compose box
 ```bash
 agent-browser --cdp 9222 snapshot -i
 ```
-Look for `textbox "Post text"` — its ref is typically `e28` but **always re-snapshot to get current refs**. Refs change every time the DOM updates.
+Look for `textbox "Post text"` — its ref changes every time so **always re-snapshot to get current refs**.
 
 ### Step 3: Click the compose textbox
 ```bash
@@ -178,8 +150,6 @@ Newlines work fine in the string — X renders them as line breaks in the tweet.
 agent-browser --cdp 9222 snapshot -i
 ```
 After typing, refs change again. Find the `button "Post"` ref. If it shows `[disabled]`, the text box may be empty — try clicking the textbox again and retyping.
-
-X may also auto-attach a link card preview (e.g. if tweet contains a URL). That's fine and expected.
 
 ### Step 6: Take a screenshot to visually verify
 ```bash
@@ -239,6 +209,6 @@ document.querySelector('article[data-testid="tweet"]')
 ---
 
 ## Related Skills
-- **agent-browser** — Core browser automation commands and ref lifecycle rules
-- **x-feed-scraper** — Scrape X feed for content to tweet about (uses same CDP approach)
+- **chrome-debug-session** — Launch Chrome with CDP debugging
+- **x-feed-scraper** — Scrape X feed for content to tweet about
 - **x-feed-summarizer** — Summarize feed into note (source material for tweet content)

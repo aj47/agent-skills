@@ -5,16 +5,21 @@ description: "Summarize X/Twitter feed quickly, including key links. Triggers: '
 
 # X/Twitter Feed Summarizer
 
-Fast extraction and summarization of X feed content using agent-browser CDP connected to your existing logged-in Chrome session.
+Fast extraction and summarization of X feed content using agent-browser CDP connected to your existing logged-in Chrome session via CDP on port 9222.
 
 **IMPORTANT: Always use `--cdp 9222`** to connect to your logged-in Chrome. Never use `--auto-connect` or a fresh browser — you won't be logged in.
 
-## Quick Workflow
+## Prerequisites
 
-### Step 1: Verify Chrome and navigate
+Requires **chrome-debug-session** skill to be running first. Verify:
 ```bash
 curl -s --max-time 3 http://localhost:9222/json/version
+```
 
+## Quick Workflow
+
+### Step 1: Navigate
+```bash
 agent-browser --cdp 9222 open https://x.com/home
 agent-browser --cdp 9222 wait 5000
 ```

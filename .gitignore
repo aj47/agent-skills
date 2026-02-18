@@ -28,5 +28,8 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Symlinked skills
+speakmcp-skills
+
 # Output
 clips/
