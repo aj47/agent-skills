@@ -31,5 +31,8 @@ Thumbs.db
 # Symlinked skills
 speakmcp-skills
 
+# Private skills
+discord-bot-db/
+
 # Output
 clips/
